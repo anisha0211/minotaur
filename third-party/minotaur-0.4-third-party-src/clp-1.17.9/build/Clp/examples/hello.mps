@@ -1,0 +1,1 @@
+/home/mech/btech/me1222013/minotaur/third-party/minotaur-0.4-third-party-src/clp-1.17.9/Clp/Clp/examples/hello.mps

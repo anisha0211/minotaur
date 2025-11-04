@@ -1,0 +1,10 @@
+prefix=/home/mech/btech/me1222013/minotaur/third-party
+libdir=/home/mech/btech/me1222013/minotaur/third-party/minotaur-0.4-third-party-src/clp-1.17.9/build/Osi/src/Osi
+
+Name: Osi
+Description: COIN-OR Open Solver Interface
+URL: https://projects.coin-or.org/Osi
+Version: 0.108.9
+Libs: ${libdir}/libOsi.la 
+Cflags: -I/home/mech/btech/me1222013/minotaur/third-party/minotaur-0.4-third-party-src/clp-1.17.9/Osi/Osi/src/Osi -I/home/mech/btech/me1222013/minotaur/third-party/minotaur-0.4-third-party-src/clp-1.17.9/build/Osi/src/Osi
+Requires: coinutils 

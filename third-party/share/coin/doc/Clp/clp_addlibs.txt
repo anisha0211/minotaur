@@ -1,0 +1,1 @@
+-L/home/mech/btech/me1222013/minotaur/third-party/lib -lClpSolver -lClp -lCoinUtils -lbz2 -llapack -lblas -lm

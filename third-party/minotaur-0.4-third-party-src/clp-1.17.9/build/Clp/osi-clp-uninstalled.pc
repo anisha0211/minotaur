@@ -1,0 +1,10 @@
+prefix=/home/mech/btech/me1222013/minotaur/third-party
+libdir=/home/mech/btech/me1222013/minotaur/third-party/minotaur-0.4-third-party-src/clp-1.17.9/build/Clp/src/OsiClp
+
+Name: OsiClp
+Description: COIN-OR Open Solver Interface for CLP
+URL: https://projects.coin-or.org/Osi
+Version: 1.17.9
+Libs: ${libdir}/libOsiClp.la 
+Cflags: -I/home/mech/btech/me1222013/minotaur/third-party/minotaur-0.4-third-party-src/clp-1.17.9/Clp/Clp/src/OsiClp
+Requires: clp osi 

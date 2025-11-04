@@ -1,0 +1,17 @@
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/doc.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/clean_examples.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/uninstall.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/test_fp2.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/edit_cache.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/rebuild_cache.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/list_install_components.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/install.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/install/local.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/install/strip.dir
+/home/mech/btech/me1222013/minotaur/build/src/CMakeFiles/minotaur.dir
+/home/mech/btech/me1222013/minotaur/build/src/CMakeFiles/edit_cache.dir
+/home/mech/btech/me1222013/minotaur/build/src/CMakeFiles/rebuild_cache.dir
+/home/mech/btech/me1222013/minotaur/build/src/CMakeFiles/list_install_components.dir
+/home/mech/btech/me1222013/minotaur/build/src/CMakeFiles/install.dir
+/home/mech/btech/me1222013/minotaur/build/src/CMakeFiles/install/local.dir
+/home/mech/btech/me1222013/minotaur/build/src/CMakeFiles/install/strip.dir

@@ -1,0 +1,5 @@
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/FortranCInterface/CMakeFiles/myfort.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/FortranCInterface/CMakeFiles/symbols.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/FortranCInterface/CMakeFiles/FortranCInterface.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/FortranCInterface/CMakeFiles/edit_cache.dir
+/home/mech/btech/me1222013/minotaur/build/CMakeFiles/FortranCInterface/CMakeFiles/rebuild_cache.dir
