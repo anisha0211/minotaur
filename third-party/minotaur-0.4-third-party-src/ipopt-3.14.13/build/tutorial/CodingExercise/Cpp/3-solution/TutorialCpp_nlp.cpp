@@ -1,1 +1,0 @@
-/home/mech/btech/me1222013/minotaur/third-party/minotaur-0.4-third-party-src/ipopt-3.14.13/tutorial/CodingExercise/Cpp/3-solution/TutorialCpp_nlp.cpp

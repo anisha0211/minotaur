@@ -59,7 +59,7 @@ set (MINOTAUR_SOURCES
      base/LinearCut.cpp 
      base/LinearFunction.cpp 
      base/LinearHandler.cpp
-     # base/LinFeasPump.cpp 
+     base/LinFeasPump.cpp 
      base/Linearizations.cpp
      base/Logger.cpp 
      base/MaxFreqBrancher.cpp

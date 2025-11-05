@@ -1,1 +1,0 @@
-/home/mech/btech/me1222013/minotaur/third-party/minotaur-0.4-third-party-src/ipopt-3.14.13/contrib/RInterface/tests/mynlp.R

@@ -1,4 +1,3 @@
-cmake_minimum_required(VERSION 3.5)
 ## Minotaur CMake file
 
 project(MINOTAUR CXX C Fortran)
@@ -20,7 +19,7 @@ set (MSG_HEAD "Minotaur config: ")  ## must preceed every message.
 
 enable_language(CXX C Fortran)
 include(FortranCInterface)
-# FortranCInterface_VERIFY(CXX)
+FortranCInterface_VERIFY(CXX)
 
 if("${CMAKE_HOST_SYSTEM}" MATCHES ".*Windows.*")
   set(SEP "\\;")
@@ -1108,7 +1107,3 @@ configure_file(
 add_custom_target(uninstall
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
 
-# Build standalone Feasibility Pump test
-add_executable(test_fp2 examples/test_fp.cpp)
-target_include_directories(test_fp2 PRIVATE base/include)
-target_link_libraries(test_fp2 minotaur pthread m dl)

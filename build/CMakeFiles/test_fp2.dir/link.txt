@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC -fno-lto -Wall -pedantic   -Wmissing-include-dirs -Wunused -Wextra -Wundef -Wshadow -Wredundant-decls   -Woverloaded-virtual -Wnon-virtual-dtor -Wmaybe-uninitialized -fopenmp -O3 -O3 -DNDEBUG -rdynamic CMakeFiles/test_fp2.dir/examples/test_fp.cpp.o -o test_fp2  -Wl,-rpath,/home/mech/btech/me1222013/minotaur/build/src src/libminotaur.so -lpthread -lm -ldl 

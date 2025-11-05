@@ -1,2 +1,0 @@
-/home/mech/btech/me1222013/miniconda3/envs/minotaur-dev/bin/x86_64-conda-linux-gnu-ar qc libmyfort.a CMakeFiles/myfort.dir/mysub.f.o CMakeFiles/myfort.dir/my_sub.f.o CMakeFiles/myfort.dir/mymodule.f90.o CMakeFiles/myfort.dir/my_module.f90.o
-/home/mech/btech/me1222013/miniconda3/envs/minotaur-dev/bin/x86_64-conda-linux-gnu-ranlib libmyfort.a

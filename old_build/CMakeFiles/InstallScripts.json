@@ -1,9 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/mech/btech/me1222013/minotaur/build/cmake_install.cmake",
-		"/home/mech/btech/me1222013/minotaur/build/src/cmake_install.cmake",
-		"/home/mech/btech/me1222013/minotaur/build/src/testing/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

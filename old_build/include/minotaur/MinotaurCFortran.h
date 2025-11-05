@@ -1,4 +1,0 @@
-#ifndef F77_HEADER_INCLUDED
-#define F77_HEADER_INCLUDED
-
-#endif
