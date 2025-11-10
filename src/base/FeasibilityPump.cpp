@@ -17,8 +17,9 @@
 #include <memory>
 
 using namespace Minotaur;
-
+#ifndef SPEW
 #define SPEW 1
+#endif
 FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e) : env_(env), p_(p), e_(e), intTol_(1e-6), maxIter_(100), maxTime_(60.0)
 {
     logger_ = env_->getLogger();
@@ -94,11 +95,6 @@ bool FeasibilityPump::projectionStep() {
 
     return true;
 }
-
-
-
-
-
 
 // Step 3: Rounding step
 void FeasibilityPump::roundingStep() {
