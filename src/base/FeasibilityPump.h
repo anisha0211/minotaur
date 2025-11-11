@@ -21,19 +21,19 @@ namespace Minotaur {
 class FeasibilityPump : public Heuristic {
 public:
   // Constructor / Destructor
-  FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e);
-  ~FeasibilityPump() override = default;
-  FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e1, EnginePtr e2)
-  : env_(env), p_(p), e_(e1) {
-    (void)e2;  // unused for base
-  }
+  //FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e);
+  FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e1);
+  ~FeasibilityPump();
+  //: env_(env), p_(p), e_(e1) {
+  //  (void)e2;  // unused for base
+  //}
 
   // --- Heuristic Interface ---
   void solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr s_pool) override;
 
   // Optional helper version for standalone testing
   virtual void solve(SolutionPoolPtr s_pool);
-  virtual void writeStats(std::ostream &out) const override;
+  virtual void writeStats(std::ostream &out) const;
 
 protected:
   // --- Core Members ---
