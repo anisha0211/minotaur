@@ -1,7 +1,7 @@
 //
 //     Minotaur -- Feasibility Pump for MINLP (modular version)
 //
-#include "LinFeasPump.h"
+
 #include "Environment.h"
 #include "Engine.h"
 #include "Problem.h"
@@ -20,18 +20,48 @@ using namespace Minotaur;
 #ifndef SPEW
 #define SPEW 1
 #endif
-FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e) : env_(env), p_(p), e_(e), intTol_(1e-6), maxIter_(100), maxTime_(60.0)
+
+
+// existing 3-arg ctor
+FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e)
+  : env_(env), p_(p), e_(e), intTol_(1e-6), maxIter_(100), maxTime_(60.0)
 {
-    logger_ = env_->getLogger();
-    timer_ = env_->getNewTimer();
-    srand(1);
+  // logger_ is a pointer (LoggerPtr) _ do not call reset() on it.
+  logger_ = env_->getLogger();
+  timer_ = env_->getNewTimer();
+  srand(1);
 }
 
+// 4-arg ctor: support callers that pass (nlpEngine, lpEngine).
+// We keep base class simple: use nlpe as the NLP engine (first engine).
+FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p,
+                                 EnginePtr nlpe, EnginePtr e)
+  : env_(env), p_(p), e_(nlpe), intTol_(1e-6), maxIter_(100), maxTime_(60.0)
+{
+  logger_ = env_->getLogger();
+ timer_ = env_->getNewTimer();
+  srand(1);
+}
+
+// In FeasibilityPump.cpp
+FeasibilityPump::~FeasibilityPump()
+{
+  if (stats_) {
+    delete stats_;
+    stats_ = 0;
+  }
+  // timer_ is managed by Env, don't delete
+}
 
 // Step 1: Initialize the FP
 bool FeasibilityPump::initialize() {
     logger_->msgStream(LogInfo) << "FP:init: enter initialize(), p_=" << (void*)p_
                            << " e_=" << (void*)e_ << "\n";
+    if (!p_) {
+        std::cerr << "[FP] ERROR: p_ is NULL in initialize().\n";
+        return false;
+    }
+	
     if (!e_) {
       logger_->msgStream(LogError) << "FP:init: engine is NULL\n";
       std::cerr << "FP:init: engine is NULL\n";
@@ -49,8 +79,17 @@ bool FeasibilityPump::initialize() {
 
 // Step 2: Projection step (solve NLP)
 bool FeasibilityPump::projectionStep() {
-    logger_->msgStream(LogInfo)
-        << "FP:proj: enter projectionStep(), e_=" << (void*)e_ << std::endl;
+
+    if (!p_) {
+        std::cerr << "[FP] ERROR: p_ is NULL in projectionStep().\n";
+        return false;
+    }
+    if (!e_) {
+        std::cerr << "[FP] ERROR: e_ is NULL in projectionStep().\n";
+        return false;
+    }
+    if (logger_)
+        logger_->msgStream(LogInfo) << "FP:proj: Entering projectionStep()\n";
 
     if (!e_) {
         logger_->msgStream(LogError) << "FP:proj: NULL engine" << std::endl;
@@ -161,8 +200,36 @@ void FeasibilityPump::solve(NodePtr, RelaxationPtr, SolutionPoolPtr s_pool)
 
 // Step 7: Solve function (the main function)
 void FeasibilityPump::solve(SolutionPoolPtr s_pool) {
-    logger_->msgStream(LogInfo) << "Starting modular Feasibility Pump..." << std::endl;
-    timer_->start();
+
+    if (!env_) {
+        std::cerr << "[FP] ERROR: env_ is NULL in solve().\n";
+        return;
+    }
+    if (!logger_) {
+        std::cerr << "[FP] WARNING: logger_ is NULL in solve().\n";
+    }
+    if (!timer_) {
+        std::cerr << "[FP] WARNING: timer_ is NULL _ continuing without timing.\n";
+    } else {
+        timer_->start();
+    }
+    if (!p_) {
+        std::cerr << "[FP] ERROR: p_ (problem) is NULL in solve().\n";
+        return;
+    }
+    if (!e_) {
+        std::cerr << "[FP] ERROR: e_ (engine) is NULL in solve().\n";
+        return;
+    }
+    if (!s_pool) {
+        std::cerr << "[FP] ERROR: s_pool is NULL in solve().\n";
+        return;
+    }
+
+    if (logger_)
+        logger_->msgStream(LogInfo) << "Starting modular Feasibility Pump..." << std::endl;
+
+   timer_->start();
 
     if (!s_pool) {
         logger_->msgStream(LogError) << "Error: Solution pool is null!" << std::endl;

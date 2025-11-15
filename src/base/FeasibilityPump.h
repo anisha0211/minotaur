@@ -23,7 +23,13 @@ public:
   // Constructor / Destructor
   //FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e);
   FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e1);
-  ~FeasibilityPump();
+  virtual ~FeasibilityPump();
+  //: env_(env), p_(p), e_(e1) {
+  //  (void)e2;  // unused for base
+  // Constructor used by derived classes that have two engine pointers
+  // (nlp engine and an lp engine). The base implementation can accept it
+  // and will use the first engine as the NLP engine.
+  FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr nlpe, EnginePtr e2);
   //: env_(env), p_(p), e_(e1) {
   //  (void)e2;  // unused for base
   //}
@@ -42,7 +48,6 @@ protected:
   EnginePtr e_;
   LoggerPtr logger_;
   Timer* timer_;
-
   double intTol_;
   UInt maxIter_;
   double maxTime_;
@@ -71,7 +76,7 @@ protected:
   // --- Add this in FeasibilityPump.h ---
   struct FeasStats {
       UInt numNLPs = 0;      // already used
-      UInt numCycles = 0;    // 👈 new field expected by LinFeasPump
+      UInt numCycles = 0;    // __ new field expected by LinFeasPump
       double time = 0.0;
   };
 
@@ -88,5 +93,4 @@ protected:
   typedef FeasibilityPump* FeasibilityPumpPtr;
 
 } // namespace Minotaur
-
 #endif // MINOTAUR_FEASIBILITYPUMP_H
