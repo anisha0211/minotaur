@@ -52,26 +52,6 @@ FeasibilityPump::~FeasibilityPump()
   }
   // timer_ is managed by Env, don't delete
 }
-// Step 1: Initialize the FP
-bool FeasibilityPump::initialize() {
-    if (!p_) {
-        std::cerr << "[FP] ERROR: p_ is NULL in initialize().\n";
-        return false;
-    }
-    if (!e_) {
-        std::cerr << "[FP] ERROR: e_ is NULL in initialize().\n";
-        return false;
-    }
-    if (logger_)
-        logger_->msgStream(LogInfo) << "FP:init: enter initialize()\n";
-
-FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e) : env_(env), p_(p), e_(e), intTol_(1e-6), maxIter_(100), maxTime_(60.0)
-{
-    logger_ = env_->getLogger();
-    timer_ = env_->getNewTimer();
-    srand(1);
-}
-
 
 // Step 1: Initialize the FP
 bool FeasibilityPump::initialize() {
