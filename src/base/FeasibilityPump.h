@@ -1,242 +1,92 @@
-//
-//     Minotaur -- It's only 1/2 bull  
-//
-//     (C)opyright 2008 - 2025 The Minotaur Team.
-//
-/** 
- * \file FeasibilityPump.h
- * \brief Declare the class FeasibilityPump derived from base class Heuristic.
- * \author Jayash Koshal, Argonne National Laboratory
- */
+#ifndef MINOTAUR_FEASIBILITYPUMP_H
+#define MINOTAUR_FEASIBILITYPUMP_H
 
-#ifndef FEASIBILITYPUMP_H
-#define FEASIBILITYPUMP_H
-
+#include "Environment.h"
+#include "Engine.h"
+#include "Problem.h"
+#include "Solution.h"
+#include "SolutionPool.h"
+#include "Timer.h"
+#include "Variable.h"
+#include "Logger.h"
 #include "Heuristic.h"
-#include "Types.h"
+
+#include <vector>
+#include <cmath>
+#include <memory>
+#include <iostream>
 
 namespace Minotaur {
-  class Engine;
-  class Problem;
 
-  /// statistics for Feasibility Pump heuristic
-  struct FeasPumpStats {
-    UInt numNLPs;         /// Number of NLPs solved in the heuristic
-    UInt errors;          /// Number of errors in NLP solved
-    UInt numCycles;       /// Number of time the same solution was obtained
-    double time;          /// Total time taken by the heuristic
-    double bestObjValue;  /// Best objective value of the feasible solution
+class FeasibilityPump : public Heuristic {
+public:
+  // Constructor / Destructor
+  //FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e);
+  FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e1);
+  virtual ~FeasibilityPump();
+  //: env_(env), p_(p), e_(e1) {
+  //  (void)e2;  // unused for base
+  // Constructor used by derived classes that have two engine pointers
+  // (nlp engine and an lp engine). The base implementation can accept it
+  // and will use the first engine as the NLP engine.
+  FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr nlpe, EnginePtr e2);
+  // --- Heuristic Interface ---
+  void solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr s_pool) override;
+
+  // Optional helper version for standalone testing
+  virtual void solve(SolutionPoolPtr s_pool);
+  virtual void writeStats(std::ostream &out) const;
+
+protected:
+  // --- Core Members ---
+  EnvPtr env_;
+  ProblemPtr p_;
+  EnginePtr e_;
+  LoggerPtr logger_;
+  Timer* timer_;
+  double intTol_;
+  UInt maxIter_;
+  double maxTime_;
+  std::vector<double> x_cont_;
+  std::vector<double> x_int_;
+
+  // --- Core Steps ---
+  virtual bool initialize();
+  virtual bool projectionStep();
+  virtual void roundingStep();
+  virtual bool isFeasible() const;
+  virtual void perturbationStep();
+  virtual void updateObjectiveToDistance();
+
+  bool isIntegral(double x) const { return fabs(x - round(x)) <= intTol_; }
+
+  // --- Empty Virtual Stubs for LinFeasPump ---
+  // These do nothing in base class, but are here so LinFeasPump can override them.
+  virtual void constructObj_(ProblemPtr, ConstSolutionPtr) {}
+  virtual void implementFP_(const double*, SolutionPoolPtr) {}
+  virtual double getSolGap_(double, double) { return 0.0; }
+  virtual bool prepareLP_(SolutionPool*) { return false; }
+  virtual void separatingCut_(double, SolutionPoolPtr) {}
+  virtual bool shouldFP_() { return false; }
+  std::vector<double> roundedSol_;  // used by LinFeasPump
+  // --- Add this in FeasibilityPump.h ---
+  struct FeasStats {
+      UInt numNLPs = 0;      // already used
+      UInt numCycles = 0;    // __ new field expected by LinFeasPump
+      double time = 0.0;
   };
 
-  /**
-   * \brief Feasibility Pump for MINLPs
-   *
-   * A Feasibility Pump heuristic used to find solutions for Mixed
-   * Integer NLPs by solving a relaxed NLP using an NLP engine. After an
-   * initial solve a sequence of points are found which are closest to
-   * the nearest integer solution obtained by rounding the previous
-   * point.
-   */
+  FeasStats* stats_ = nullptr;
 
-  class FeasibilityPump : public Heuristic {
-
-  public:
-
-    /// default constructor
-    FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e);
-
-    /// constructor for derived class
-    FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr nlpe, EnginePtr
-                    e);
-
-    /// default destructor
-    virtual ~FeasibilityPump();
-
-    /// call to the heuristic
-    void solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr s_pool);
-
-    /// write statistic to the logger
-    void writeStats(std::ostream &out) const;
-
-  protected:
-
-    /// Message name for the heuristic
-    const static std::string me_;
-
-    /// Binary/integer variables present in the problem
-    VarVector bins_;
-
-    /// Pointer to the engine to be used to solve the problem
-    EnginePtr e_;
-
-    /// Pointer to the environment
-    EnvPtr env_;
-
-    /// Vector for hash value of solutions
-    DoubleVector hashVal_;
-
-    /// Tolerance for a number to be considered as an integer
-    double intTol_;
-
-    /// Pointer to the logger
-    LoggerPtr logger_;
-
-    /// Number of variables to be flipped if cycling is detected
-    UInt nToFlip_;
-
-    /// Pointer to the problem being solved
-    ProblemPtr p_;
-
-    /// A random vector for inner product with the solution
-    DoubleVector random_;
-
-    /// Vector of rounded solution
-    DoubleVector roundedSol_;
-
-    /// Statistics for the Feasibility Pump heuristic
-    FeasPumpStats* stats_;
-
-    /// Timer of the heuristic
-    Timer* timer_;
-
-    /** 
-     * \brief Function to construct/update the objective function
-     *
-     * \param[in] prob Pointer to the cloned problem
-     * \param[in] sol Pointer to the solution of relaxation that was
-     *            previously solved.
-     *
-     * This function selects the variable which are fractional and
-     * construct the objective function out of such variables. The
-     * new objective function replaces the objective of the problem 
-     * passed
-     */
-    virtual void constructObj_(ProblemPtr prob, ConstSolutionPtr sol);
-
-    /**
-     * \brief Function to convert a solution of the cloned problem to 
-     * that of an original problem
-     *
-     * \param[in] s_pool Pointer to solution pool of original problem
-     * \param[in] sol Solution pointer to the modified (cloned) 
-     * problem
-     *
-     * The binary variables are fixed by changing their bounds in the
-     * original problem and then the original problem is resolved to
-     * obtain a feasible solution. Bounds are relaxed at the end. 
-     */
-    void convertSol_(SolutionPoolPtr s_pool, ConstSolutionPtr sol); 
-
-    /**
-     * \brief A search function for detection of cycling
-     *
-     * \param[in] find_value Value to be located in a vector containing
-     * hash values of already visited rounded solutions
-     *
-     * \return true If the point already exist implying cycling 
-     * and false otherwise
-     */
-    bool cycle_(double find_value);
-
-    /** 
-     * \brief A function to hash the solutions
-     *
-     * \return The hash value of the solution
-     *
-     * A hashing function which calculates the inner product of vector
-     * x with a FIXED random vector in (0,1]^n. This function uses the
-     * roundedSol_ vector and random_ vector to calculate the hash value
-     */
-    double hash_();
-
-    /** 
-     * \brief Function to implement the Feasibility Pump method
-     *
-     * \param[in] Constant pointer to primal solution
-     * \param[in] Pointer to solution pool
-     *
-     */
-    virtual void implementFP_(const double* x, SolutionPoolPtr s_pool);
-
-    /** 
-     * \brief Function to check the integrality of a variable
-     *
-     * \param[in] Constant pointer to the primal solution
-     *
-     * return true if there is any fractional variable else false
-     */
-    bool isFrac_(const double* x);
-
-
-    /** 
-     * \brief A function to perturb the rounded solution in case of 
-     * cycling
-     *
-     * \param[in] hash_val Hash value of the current rounded solution
-     * \param[in] n_to_flip Number of variables to be flipped
-     *
-     * This function uses selectToFlip_ to get candidates for flipping
-     * till a new rounded solution is obtained which is not visited 
-     * earlier. Cycling_ is used to detect earlier existence. The
-     * parameter n_to_flip is passed by the calling method is usually
-     * an indicator of integer infeasibilities of the solution.
-     */
-    void perturb_(double hash_val, UInt n_to_flip);
-
-    /**
-     * \brief A function to restore the upper and lower bounds of the
-     * problem.
-     *
-     * \param[in] LB_copy. Pointer to an array of lower bound. 
-     * \param[in] UB_copy. Pointer to an array of upper bound. 
-     * \param[in] numvars. Number of variables in the problem.
-     *
-     */
-    void restoreBounds_(double* LB_copy, double* UB_copy, UInt vars);
-
-    /**
-     * \brief A function to save the upper and lower bounds of the
-     * problem.
-     *
-     * \param[in] LB_copy. Pointer to an array of lower bound. Space has
-     * to be allocated.
-     * \param[in] UB_copy. Pointer to an array of upper bound. Space has
-     * to be allocated.
-     * \param[in] numvars. Number of variables in the problem.
-     *
-     */
-    void saveBounds_(double* LB_copy, double* UB_copy, UInt vars);
-
-    /**
-     * \brief A funtion to randomly select "n" binary/integer 
-     * variable to be flipped.
-     *
-     * \param[in] n_to_flip Number of variables to be flipped
-     *
-     * \return The vector of pointer to the variables selected as
-     * candidate
-     * 
-     * This function uses random sampling for selection of variables  as
-     * a candidate for be flipped from 0 to 1 or 1 to 0.
-     */
-    VarVector selectToFlip_(UInt n_to_flip);
-
-    /**
-     * \brief Function to decide whether to use Feasibility Pump
-     *
-     * return true or false. 
-     *
-     * We decide not to use Feasibility Pump is problem has integer
-     * variables and/or if the problem is nonlinear (constraints or
-     * objective)
-     */
-    virtual bool shouldFP_();
+  // Methods LinFeasPump expects
+  virtual bool isFrac_(const double* /*x*/) { return false; }
+  virtual void convertSol_(SolutionPoolPtr, ConstSolutionPtr) {}
+  virtual size_t hash_() { return 0; }
+  virtual bool cycle_(size_t) { return false; }
+  virtual void perturb_(size_t, UInt) {}
 
   };
+  typedef FeasibilityPump* FeasibilityPumpPtr;
 
-  typedef FeasibilityPump* FeasPumpPtr;
-
-}
-
-#endif
-
+} // namespace Minotaur
+#endif // MINOTAUR_FEASIBILITYPUMP_H
