@@ -30,6 +30,10 @@ public:
   // (nlp engine and an lp engine). The base implementation can accept it
   // and will use the first engine as the NLP engine.
   FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr nlpe, EnginePtr e2);
+  //: env_(env), p_(p), e_(e1) {
+  //  (void)e2;  // unused for base
+  //}
+
   // --- Heuristic Interface ---
   void solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr s_pool) override;
 

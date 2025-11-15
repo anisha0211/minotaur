@@ -27,6 +27,7 @@
 #include "BndProcessor.h"
 #include "BranchAndBound.h"
 #include "LexicoBrancher.h"
+#include "FeasibilityPump.h"
 #include "LinFeasPump.h"
 #include "MINLPDiving.h"
 #include "MaxFreqBrancher.h"
@@ -186,9 +187,12 @@ BranchAndBound* Bnb::getBab_(Engine* engine, HandlerVector& handlers)
     EngineFactory efac(env_);
     EnginePtr lpe = efac.getLPEngine();
     EnginePtr nlpe = engine->emptyCopy();
-    LinFeasPumpPtr lin_feas_pump =
-        (LinFeasPumpPtr) new LinFeasPump(env_, oinst_, nlpe, lpe);
-    bab->addPreRootHeur(lin_feas_pump);
+    //LinFeasPumpPtr lin_feas_pump =
+    //    (LinFeasPumpPtr) new LinFeasPump(env_, oinst_, nlpe, lpe);
+    //bab->addPreRootHeur(lin_feas_pump);
+    FeasibilityPumpPtr feas_pump =
+        (FeasibilityPumpPtr) new FeasibilityPump(env_, oinst_, nlpe, lpe);
+    bab->addPreRootHeur(feas_pump);
   }
   return bab;
 }

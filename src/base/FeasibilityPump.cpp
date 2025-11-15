@@ -1,6 +1,7 @@
 //
 //     Minotaur -- Feasibility Pump for MINLP (modular version)
 //
+
 #include "Environment.h"
 #include "Engine.h"
 #include "Problem.h"
@@ -19,6 +20,7 @@ using namespace Minotaur;
 #ifndef SPEW
 #define SPEW 1
 #endif
+
 
 // existing 3-arg ctor
 FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e)
@@ -62,6 +64,24 @@ bool FeasibilityPump::initialize() {
     }
     if (logger_)
         logger_->msgStream(LogInfo) << "FP:init: enter initialize()\n";
+
+FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e) : env_(env), p_(p), e_(e), intTol_(1e-6), maxIter_(100), maxTime_(60.0)
+{
+    logger_ = env_->getLogger();
+    timer_ = env_->getNewTimer();
+    srand(1);
+}
+
+
+// Step 1: Initialize the FP
+bool FeasibilityPump::initialize() {
+    logger_->msgStream(LogInfo) << "FP:init: enter initialize(), p_=" << (void*)p_
+                           << " e_=" << (void*)e_ << "\n";
+    if (!p_) {
+        std::cerr << "[FP] ERROR: p_ is NULL in initialize().\n";
+        return false;
+    }
+	
     if (!e_) {
       logger_->msgStream(LogError) << "FP:init: engine is NULL\n";
       std::cerr << "FP:init: engine is NULL\n";
@@ -79,6 +99,7 @@ bool FeasibilityPump::initialize() {
 
 // Step 2: Projection step (solve NLP)
 bool FeasibilityPump::projectionStep() {
+
     if (!p_) {
         std::cerr << "[FP] ERROR: p_ is NULL in projectionStep().\n";
         return false;
@@ -89,8 +110,6 @@ bool FeasibilityPump::projectionStep() {
     }
     if (logger_)
         logger_->msgStream(LogInfo) << "FP:proj: Entering projectionStep()\n";
-    logger_->msgStream(LogInfo)
-        << "FP:proj: enter projectionStep(), e_=" << (void*)e_ << std::endl;
 
     if (!e_) {
         logger_->msgStream(LogError) << "FP:proj: NULL engine" << std::endl;
@@ -201,6 +220,7 @@ void FeasibilityPump::solve(NodePtr, RelaxationPtr, SolutionPoolPtr s_pool)
 
 // Step 7: Solve function (the main function)
 void FeasibilityPump::solve(SolutionPoolPtr s_pool) {
+
     if (!env_) {
         std::cerr << "[FP] ERROR: env_ is NULL in solve().\n";
         return;
@@ -228,8 +248,8 @@ void FeasibilityPump::solve(SolutionPoolPtr s_pool) {
 
     if (logger_)
         logger_->msgStream(LogInfo) << "Starting modular Feasibility Pump..." << std::endl;
-logger_->msgStream(LogInfo) << "Starting modular Feasibility Pump..." << std::endl;
-    timer_->start();
+
+   timer_->start();
 
     if (!s_pool) {
         logger_->msgStream(LogError) << "Error: Solution pool is null!" << std::endl;
