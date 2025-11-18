@@ -143,7 +143,7 @@ void LinFeasPump::implementFP_(const double*, SolutionPoolPtr s_pool)
   int err;
   ModVector p_mods, r_mods; 
   
-  e_->setOptionsForSingleSolve();
+  e2_->setOptionsForSingleSolve();
   lpE_->solve();
   f_nlp = lpE_->getSolutionValue();
   sol   = lpE_->getSolution();
@@ -228,7 +228,7 @@ void LinFeasPump::implementFP_(const double*, SolutionPoolPtr s_pool)
       }
     }
   }
-  e_->setOptionsForRepeatedSolve();
+  e2_->setOptionsForRepeatedSolve();
 }
 
 
@@ -245,7 +245,7 @@ bool LinFeasPump::prepareLP_(SolutionPool *sp)
   
   r_  = (RelaxationPtr) new Relaxation(env_);
   lh_ = (LinearHandlerPtr) new LinearHandler(env_, p_);
-  qh_ = (QGHandlerPtr)  new QGHandler(env_, p_, e_);
+  qh_ = (QGHandlerPtr)  new QGHandler(env_, p_, e2_);
   
   lh_->relaxInitInc(r_, sp, &is_inf);
   if (is_inf == true) {
