@@ -29,6 +29,7 @@
 #include "LexicoBrancher.h"
 #include "FeasibilityPump.h"
 #include "LinFeasPump.h"
+#include "FeasibilityPump.h"
 #include "MINLPDiving.h"
 #include "MaxFreqBrancher.h"
 #include "MaxInfBrancher.h"
@@ -190,9 +191,8 @@ BranchAndBound* Bnb::getBab_(Engine* engine, HandlerVector& handlers)
     //LinFeasPumpPtr lin_feas_pump =
     //    (LinFeasPumpPtr) new LinFeasPump(env_, oinst_, nlpe, lpe);
     //bab->addPreRootHeur(lin_feas_pump);
-    FeasibilityPumpPtr feas_pump =
-        (FeasibilityPumpPtr) new FeasibilityPump(env_, oinst_, nlpe, lpe);
-    bab->addPreRootHeur(feas_pump);
+    FeasibilityPumpPtr feas_pump = (FeasibilityPumpPtr) new FeasibilityPump(env_, oinst_, nlpe, lpe);
+    bab->addPreRootHeur(feas_pump.get());
   }
   return bab;
 }
