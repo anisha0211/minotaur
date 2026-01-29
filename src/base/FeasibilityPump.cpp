@@ -32,24 +32,26 @@ const std::string FeasibilityPump::me_ = "FeasibilityPump: ";
 // constructors
 // ---------------------------------------------------------------------------
 FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e2)
-  : e2_(e2), e1_(EnginePtr()), env_(env),
+  : e1_(EnginePtr()),e2_(e2), env_(env),
     intTol_(1e-6), nToFlip_(0), p_(p), stats_(0)
 {
   stats_ = new FeasPumpStats();      // ← ADD THIS LINE
   stats_->numNLPs = stats_->errors = stats_->numCycles = 0;
   stats_->time = 0.0;
+  stats_->errors=0;
   stats_->bestObjValue = INFINITY;
   initCommon_();
 }
 
 FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p,
                                  EnginePtr e1, EnginePtr e2)
-  : e2_(e2), e1_(e1), env_(env),
+  :  e1_(e1), e2_(e2), env_(env),
     intTol_(1e-6), nToFlip_(0), p_(p), stats_(0)
 {
   stats_ = new FeasPumpStats();      // ← ADD THIS LINE
   stats_->numNLPs = stats_->errors = stats_->numCycles = 0;
   stats_->time = 0.0;
+  stats_->errors=0;
   stats_->bestObjValue = INFINITY;
   initCommon_();
 }

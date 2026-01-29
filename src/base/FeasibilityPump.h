@@ -95,7 +95,7 @@ protected:                     // <--- everything below is protected
 // ---------------------------------------------------------------------------
 // Smart pointer – std::shared_ptr (no boost)
 // ---------------------------------------------------------------------------
-typedef std::shared_ptr<FeasibilityPump> FeasibilityPumpPtr;
+typedef FeasibilityPump* FeasibilityPumpPtr;
 
 } // namespace Minotaur
 
