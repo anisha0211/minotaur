@@ -192,7 +192,7 @@ BranchAndBound* Bnb::getBab_(Engine* engine, HandlerVector& handlers)
     //    (LinFeasPumpPtr) new LinFeasPump(env_, oinst_, nlpe, lpe);
     //bab->addPreRootHeur(lin_feas_pump);
     FeasibilityPumpPtr feas_pump = (FeasibilityPumpPtr) new FeasibilityPump(env_, oinst_, nlpe, lpe);
-    bab->addPreRootHeur(feas_pump.get());
+    bab->addPreRootHeur(feas_pump);
   }
   return bab;
 }
