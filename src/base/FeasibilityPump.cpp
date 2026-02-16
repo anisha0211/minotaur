@@ -33,7 +33,7 @@ const std::string FeasibilityPump::me_ = "FeasibilityPump: ";
 // ---------------------------------------------------------------------------
 FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e2)
   : e1_(EnginePtr()), e2_(e2), env_(env),
-    intTol_(1e-6), nToFlip_(0), p_(p), stats_(nullptr), rel_(nullptr)
+    intTol_(1e-6), nToFlip_(0), p_(p), stats_(nullptr),rel_(nullptr)
 {
   stats_ = new FeasPumpStats();
   stats_->numNLPs = stats_->errors = stats_->numCycles = 0;
@@ -42,46 +42,16 @@ FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e2)
   stats_->bestObjValue = INFINITY;
 
   initCommon_();
+  p_->getJacobian();
 
-  // ────────────────────────────────────────────────────────────────
-  // Create and initialize the relaxation (critical for Jacobian!)
-  // ────────────────────────────────────────────────────────────────
-  rel_ = new Relaxation(p_, env_);
-  rel_->calculateSize();
 
-  OptionDBPtr options = env_->getOptions();
-
-  if (options->findBool("use_native_cgraph")->getValue() ||
-      rel_->isQP() ||
-      rel_->isQuadratic()) {
-    rel_->setNativeDer();
-  } else {
-    // Attach Jacobian from original problem - most important part
-    rel_->setJacobian(p_->getJacobian());
-
-    // Also attach Hessian if it exists
-    if (p_->getHessian()) {
-      rel_->setHessian(p_->getHessian());
-    }
-  }
-
-  // Safety check & debug output
-  if (!rel_->getJacobian()) {
-    logger_->errStream() << me_
-                         << "ERROR: Jacobian is still null after relaxation setup!"
-                         << std::endl;
-  } else {
-    logger_->msgStream(LogDebug) << me_
-                                 << "Relaxation created with Jacobian attached"
-                                 << std::endl;
-  }
-  // ────────────────────────────────────────────────────────────────
 }
 
 FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p,
                                  EnginePtr e1, EnginePtr e2)
   : e1_(e1), e2_(e2), env_(env),
     intTol_(1e-6), nToFlip_(0), p_(p), stats_(nullptr), rel_(nullptr)
+
 {
   stats_ = new FeasPumpStats();
   stats_->numNLPs = stats_->errors = stats_->numCycles = 0;
@@ -90,33 +60,8 @@ FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p,
   stats_->bestObjValue = INFINITY;
 
   initCommon_();
+  p_->getJacobian();
 
-  // Same relaxation setup as above
-  rel_ = new Relaxation(p_, env_);
-  rel_->calculateSize();
-
-  OptionDBPtr options = env_->getOptions();
-
-  if (options->findBool("use_native_cgraph")->getValue() ||
-      rel_->isQP() ||
-      rel_->isQuadratic()) {
-    rel_->setNativeDer();
-  } else {
-    rel_->setJacobian(p_->getJacobian());
-    if (p_->getHessian()) {
-      rel_->setHessian(p_->getHessian());
-    }
-  }
-
-  if (!rel_->getJacobian()) {
-    logger_->errStream() << me_
-                         << "ERROR: Jacobian is still null after relaxation setup!"
-                         << std::endl;
-  } else {
-    logger_->msgStream(LogDebug) << me_
-                                 << "Relaxation created with Jacobian attached"
-                                 << std::endl;
-  }
 }
 
 void FeasibilityPump::initCommon_()
@@ -144,7 +89,6 @@ FeasibilityPump::~FeasibilityPump()
 {
   delete stats_;
   if (timer_) delete timer_;
-  if (rel_) delete rel_;
 }
 
 // ---------------------------------------------------------------------------
@@ -438,8 +382,10 @@ bool FeasibilityPump::shouldFP_() const
 // ---------------------------------------------------------------------------
 // main solve()
 // ---------------------------------------------------------------------------
-void FeasibilityPump::solve(NodePtr, RelaxationPtr, SolutionPoolPtr s_pool)
+void FeasibilityPump::solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr s_pool)
 {
+  if (!rel) return;
+  rel_=rel;
   if (!shouldFP_()) {
     logger_->msgStream(LogInfo) << me_ << "Skipping (not MILP/MINLP)\n";
     return;
