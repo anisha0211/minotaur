@@ -33,7 +33,7 @@ const std::string FeasibilityPump::me_ = "FeasibilityPump: ";
 // ---------------------------------------------------------------------------
 FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e2)
   : e1_(EnginePtr()), e2_(e2), env_(env),
-    intTol_(1e-6), nToFlip_(0), p_(p), stats_(nullptr),rel_(nullptr)
+    intTol_(1e-6), nToFlip_(0), p_(p), stats_(nullptr)
 {
   stats_ = new FeasPumpStats();
   stats_->numNLPs = stats_->errors = stats_->numCycles = 0;
@@ -42,15 +42,13 @@ FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e2)
   stats_->bestObjValue = INFINITY;
 
   initCommon_();
-  p_->getJacobian();
-
 
 }
 
 FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p,
                                  EnginePtr e1, EnginePtr e2)
   : e1_(e1), e2_(e2), env_(env),
-    intTol_(1e-6), nToFlip_(0), p_(p), stats_(nullptr), rel_(nullptr)
+    intTol_(1e-6), nToFlip_(0), p_(p), stats_(nullptr)
 
 {
   stats_ = new FeasPumpStats();
@@ -60,7 +58,6 @@ FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p,
   stats_->bestObjValue = INFINITY;
 
   initCommon_();
-  p_->getJacobian();
 
 }
 
@@ -159,7 +156,7 @@ bool FeasibilityPump::solveRelaxation_(EnginePtr engine,RelaxationPtr rel,  cons
   }
 
   engine->clear();
-  engine->load(rel_);               // ← Changed: use rel_
+  engine->load(rel);               // ← Changed: use rel_
   EngineStatus st = engine->solve();
   ++stats_->numNLPs;
 
@@ -389,8 +386,15 @@ bool FeasibilityPump::shouldFP_() const
 // ---------------------------------------------------------------------------
 void FeasibilityPump::solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr s_pool)
 {
-  if (!rel) return;
-  rel_=rel;
+   if (!rel) {
+    // Try to get it manually
+   rel=(RelaxationPtr) new Relaxation(p_,env_);
+   if (!rel) {
+     logger_->msgStream(LogInfo)
+       << me_ << "No relaxation available\n";
+     return;
+   }
+  }
   if (!shouldFP_()) {
     logger_->msgStream(LogInfo) << me_ << "Skipping (not MILP/MINLP)\n";
     return;
