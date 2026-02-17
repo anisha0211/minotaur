@@ -58,6 +58,7 @@ protected:                     // <--- everything below is protected
   EnginePtr e1_;  // NLP engine (MINLP only)
 
   // ----- (rest of the members you already have) -------------------------
+  RelaxationPtr rel_;
   EnvPtr    env_;
   ProblemPtr p_;
   LoggerPtr logger_;
