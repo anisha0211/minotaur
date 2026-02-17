@@ -83,7 +83,7 @@ protected:                     // <--- everything below is protected
 
   // ----- (your private helpers) -----------------------------------------
   void initCommon_();
-  bool solveRelaxation_(EnginePtr engine, const double*& x);
+  bool solveRelaxation_(EnginePtr engine,RelaxationPtr rel, const double*& x);
   void randomRound_(const double* contX);
   bool l1Projection_();
   bool oaRounding_();
