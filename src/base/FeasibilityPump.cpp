@@ -151,8 +151,13 @@ void FeasibilityPump::perturb_(UInt, UInt nflip)
 // ---------------------------------------------------------------------------
 // Step 1 _ solve relaxation (LP or NLP)
 // ---------------------------------------------------------------------------
-bool FeasibilityPump::solveRelaxation_(EnginePtr engine, const double*& x)
+bool FeasibilityPump::solveRelaxation_(EnginePtr engine,RelaxationPtr rel,  const double*& x)
 {
+  if (!rel) {
+    logger_->msgStream(LogError) << me_ << "Relaxation is NULL!\n";
+    return false;
+  }
+
   engine->clear();
   engine->load(rel_);               // ← Changed: use rel_
   EngineStatus st = engine->solve();
@@ -398,7 +403,7 @@ void FeasibilityPump::solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr s_p
   const double* x = nullptr;
   EnginePtr relaxEngine = isMILP ? e2_ : e1_;
 
-  if (!solveRelaxation_(relaxEngine, x)) {
+  if (!solveRelaxation_(relaxEngine,rel, x)) {
     stats_->time = timer_->query();
     return;
   }
