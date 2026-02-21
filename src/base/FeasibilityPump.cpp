@@ -148,7 +148,7 @@ void FeasibilityPump::perturb_(UInt, UInt nflip)
 // ---------------------------------------------------------------------------
 // Step 1 _ solve relaxation (LP or NLP)
 // ---------------------------------------------------------------------------
-bool FeasibilityPump::solveRelaxation_(EnginePtr engine,RelaxationPtr rel,  const double*& x)
+bool FeasibilityPump::solveRelaxation_(EnginePtr engine, RelaxationPtr rel, const double*& x)
 {
   if (!rel) {
     logger_->msgStream(LogError) << me_ << "Relaxation is NULL!\n";
@@ -288,38 +288,44 @@ bool FeasibilityPump::l1Projection_()
 // ---------------------------------------------------------------------------
 bool FeasibilityPump::oaRounding_()
 {
+  FunctionPtr f1, f2;
   ProblemPtr oaProb = p_->clone(env_);
   LinearFunctionPtr objLF(new LinearFunction());
 
   // L1 slack variables
   std::vector<VariablePtr> slacks;
-  for (size_t i = 0; i < intVars_.size(); ++i) {
-    VariablePtr v = oaProb->getVariable(intVars_[i]->getIndex());
-    double target = roundedSol_[intVars_[i]->getIndex()];
-    VariablePtr t = oaProb->newVariable(0.0, INFINITY, Continuous);
-    slacks.push_back(t);
-    objLF->addTerm(t, 1.0);
+  //for (size_t i = 0; i < intVars_.size(); ++i) {
+  //  VariablePtr v = oaProb->getVariable(intVars_[i]->getIndex());
+  //  double target = roundedSol_[intVars_[i]->getIndex()];
+  //  VariablePtr t = oaProb->newVariable(0.0, INFINITY, Continuous);
+  //  slacks.push_back(t);
+  //  objLF->addTerm(t, 1.0);
 
-    LinearFunctionPtr lf1(new LinearFunction());
-    lf1->addTerm(v, 1.0);
-    lf1->addTerm(t, -1.0);
-    oaProb->newConstraint(FunctionPtr(new Function(lf1)), -INFINITY, target);
+  //  LinearFunctionPtr lf1(new LinearFunction());
+  //  lf1->addTerm(v, 1.0);
+  //  lf1->addTerm(t, -1.0);
+  //            
+  //  //f1 = FunctionPtr(new Function(lf1));
+  //  //oaProb->newConstraint(f1, -INFINITY, target);
 
-    LinearFunctionPtr lf2(new LinearFunction());
-    lf2->addTerm(v, -1.0);
-    lf2->addTerm(t, -1.0);
-    oaProb->newConstraint(FunctionPtr(new Function(lf2)), -INFINITY, -target);
-  }
+  //  //LinearFunctionPtr lf2(new LinearFunction());
+  //  //lf2->addTerm(v, -1.0);
+  //  //lf2->addTerm(t, -1.0);
+  //  //f2 = FunctionPtr(new Function(lf2));
+  //  //oaProb->newConstraint(f2, -INFINITY, -target);
+  //}
 
-  // Add previous linearizations (if any)
-  for (size_t k = 0; k < oaCuts_.size(); ++k) {
-    LinearFunctionPtr lf = oaCuts_[k]->getFunction()->getLinearFunction();
-    if (lf) {
-      oaProb->newConstraint(FunctionPtr(new Function(lf)), -INFINITY, oaRhs_[k]);
-    }
-  }
+  //// Add previous linearizations (if any)
+  ////for (size_t k = 0; k < oaCuts_.size(); ++k) {
+  ////  LinearFunctionPtr lf = oaCuts_[k]->getFunction()->getLinearFunction();
+  ////  if (lf) {
+  ////    LinearFunctionPtr lfc = lf->clone();
+  ////    FunctionPtr f(new Function(lfc));
+  ////    oaProb->newConstraint(f, -INFINITY, oaRhs_[k]);
+  ////  }
+  ////}
 
-  oaProb->changeObj(FunctionPtr(new Function(objLF)), 0.0);
+  //oaProb->changeObj(FunctionPtr(new Function(objLF)), 0.0);
 
   e2_->clear();
   e2_->load(oaProb);
@@ -376,8 +382,8 @@ bool FeasibilityPump::l2Projection_()
 bool FeasibilityPump::shouldFP_() const
 {
   ConstProblemSizePtr sz = p_->getSize();
-  bool isMILP = (sz->nonlinCons == 0 && sz->ints > 0);
-  bool isMINLP = (sz->nonlinCons > 0 && sz->ints > 0);
+  bool isMILP = (sz->nonlinCons == 0 && (sz->ints > 0 || sz->bins > 0));
+  bool isMINLP = (sz->nonlinCons > 0 && (sz->ints > 0 || sz->bins > 0));
   return isMILP || isMINLP;
 }
 
@@ -388,7 +394,17 @@ void FeasibilityPump::solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr s_p
 {
    if (!rel) {
     // Try to get it manually
+   OptionDBPtr options = env_->getOptions();
    rel=(RelaxationPtr) new Relaxation(p_,env_);
+   rel->calculateSize();
+   if(options->findBool("use_native_cgraph")->getValue() || rel->isQP() ||
+      rel->isQuadratic()) {
+     rel->setNativeDer();
+   } else {
+     rel->setJacobian(p_->getJacobian());
+     rel->setHessian(p_->getHessian());
+   }
+
    if (!rel) {
      logger_->msgStream(LogInfo)
        << me_ << "No relaxation available\n";
@@ -402,7 +418,7 @@ void FeasibilityPump::solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr s_p
 
   timer_->start();
   ConstProblemSizePtr sz = p_->getSize();
-  bool isMILP = (sz->nonlinCons == 0 && sz->ints > 0);
+  bool isMILP = (sz->nonlinCons == 0 && (sz->ints > 0 || sz->bins > 0));
 
   const double* x = nullptr;
   EnginePtr relaxEngine = isMILP ? e2_ : e1_;
