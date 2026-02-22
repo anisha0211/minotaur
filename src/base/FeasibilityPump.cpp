@@ -172,18 +172,18 @@ void FeasibilityPump::solveMILP_(SolutionPoolPtr sPool)
 void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
 {
   // Continuous NLP (initial relaxation step)
-  OptionDBPtr options = env_->getOptions();
-   RelaxationPtr rel=(RelaxationPtr) new Relaxation(p_,env_);
-   rel->calculateSize();
-   if(options->findBool("use_native_cgraph")->getValue() || rel->isQP() ||
-      rel->isQuadratic()) {
-     rel->setNativeDer();
-   } else {
-     rel->setJacobian(p_->getJacobian());
-     rel->setHessian(p_->getHessian());
-   }
+  //OptionDBPtr options = env_->getOptions();
+  // RelaxationPtr rel=(RelaxationPtr) new Relaxation(p_,env_);
+  // rel->calculateSize();
+  // if(options->findBool("use_native_cgraph")->getValue() || rel->isQP() ||
+  //   rel->isQuadratic()) {
+  //   rel->setNativeDer();
+  // } else {
+  //   rel->setJacobian(p_->getJacobian());
+  //   rel->setHessian(p_->getHessian());
+  // }
   e1_->clear();
-  e1_->load(rel);
+  e1_->load(p_);
 
   EngineStatus st = e1_->solve();
   if (st != ProvenOptimal && st != ProvenLocalOptimal)
@@ -206,7 +206,7 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
     // Build OA (Outer Approximation) MILP, (FP-OA)
 
     ProblemPtr oaProb = p_->clone(env_);
-
+    oaProb->prepareForSolve();
     buildL1Objective_(oaProb, xk);
     addOACuts_(oaProb, xk);
     addSeparationCuts_(oaProb);  // enhance FP, convex feasible region overall (gi's independently might be non-convex)
@@ -237,6 +237,7 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
     // L2 Projection, (FP-NLP)
 
     ProblemPtr projProb = p_->clone(env_);
+    projProb->prepareForSolve();
     buildL2Objective_(projProb, xhat);
 
     e1_->clear();
