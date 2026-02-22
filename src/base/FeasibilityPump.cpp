@@ -172,18 +172,18 @@ void FeasibilityPump::solveMILP_(SolutionPoolPtr sPool)
 void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
 {
   // Continuous NLP (initial relaxation step)
-  //OptionDBPtr options = env_->getOptions();
-  // RelaxationPtr rel=(RelaxationPtr) new Relaxation(p_,env_);
-  // rel->calculateSize();
-  // if(options->findBool("use_native_cgraph")->getValue() || rel->isQP() ||
-  //   rel->isQuadratic()) {
-  //   rel->setNativeDer();
-  // } else {
-  //   rel->setJacobian(p_->getJacobian());
-  //   rel->setHessian(p_->getHessian());
-  // }
+  OptionDBPtr options = env_->getOptions();
+  RelaxationPtr rel=(RelaxationPtr) new Relaxation(p_,env_);
+  rel->calculateSize();
+  if(options->findBool("use_native_cgraph")->getValue() || rel->isQP() ||
+     rel->isQuadratic()) {
+     rel->setNativeDer();
+  } else {
+     rel->setJacobian(p_->getJacobian());
+     rel->setHessian(p_->getHessian());
+  }
   e1_->clear();
-  e1_->load(p_);
+  e1_->load(rel);
 
   EngineStatus st = e1_->solve();
   if (st != ProvenOptimal && st != ProvenLocalOptimal)
