@@ -212,7 +212,7 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
     addSeparationCuts_(oaProb);  // enhance FP, convex feasible region overall (gi's independently might be non-convex)
 
     e2_->clear();
-    e2_->load(oaProb);
+    e2_->load(rel);
 
     EngineStatus st2 = e2_->solve();
     if (st2 != ProvenOptimal && st2 != ProvenLocalOptimal)
