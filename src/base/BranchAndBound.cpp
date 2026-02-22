@@ -378,7 +378,7 @@ void BranchAndBound::solve()
     }
   }
   tm_->setUb(solPool_->getBestSolutionValue());
-
+  
   // do the root
   current_node = processRoot_(&should_prune, &dived_prev);
 
@@ -407,7 +407,8 @@ void BranchAndBound::solve()
                                  << me_ << "ub = " << tm_->getUb() << std::endl;
 #endif
   }
-
+  //making should_stop=true, to run FP
+  should_stop=true;
   // solve root outside the loop. save the useful information.
   while(should_stop == false) {
 #if SPEW

@@ -186,12 +186,13 @@ BranchAndBound* Bnb::getBab_(Engine* engine, HandlerVector& handlers)
 
   if(true == options->findBool("FPump")->getValue()) {
     EngineFactory efac(env_);
-    EnginePtr lpe = efac.getLPEngine();
+    //EnginePtr lpe = efac.getLPEngine();
+    EnginePtr milpe=efac.getMILPEngine();
     EnginePtr nlpe = engine->emptyCopy();
     //LinFeasPumpPtr lin_feas_pump =
     //    (LinFeasPumpPtr) new LinFeasPump(env_, oinst_, nlpe, lpe);
     //bab->addPreRootHeur(lin_feas_pump);
-    FeasibilityPumpPtr feas_pump = (FeasibilityPumpPtr) new FeasibilityPump(env_, oinst_, nlpe, lpe);
+    FeasibilityPumpPtr feas_pump = (FeasibilityPumpPtr) new FeasibilityPump(env_, oinst_, nlpe, milpe);
     bab->addPreRootHeur(feas_pump);
   }
   return bab;

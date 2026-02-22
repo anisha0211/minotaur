@@ -97,7 +97,7 @@ MILPEnginePtr EngineFactory::getMILPEngine()
   }
 #endif
 #ifdef USE_CPX
-  if (env_->getOptions()->findString("milp_engine")->getValue() == "Cplex") {
+  if (env_->getOptions()->findString("milp_engine")->getValue() == "cplex") {
     return ((CplexMILPEnginePtr) new CplexMILPEngine(env_));
   }
 #endif

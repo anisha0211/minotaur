@@ -157,7 +157,7 @@ void FeasibilityPump::solve(NodePtr, RelaxationPtr, SolutionPoolPtr sPool)
 
 void FeasibilityPump::solveMILP_(SolutionPoolPtr sPool)
 {
-  e2_->clear();
+  
   e2_->load(p_);
 
   EngineStatus st = e2_->solve();
@@ -190,6 +190,8 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
     return;
 
   ConstSolutionPtr sol = e1_->getSolution();
+
+
   std::vector<double> xk(sol->getPrimal(), sol->getPrimal() + n_);
 
   if (isIntegerFeasible_(xk.data()) && isNonlinearFeasible_(xk.data())) {
@@ -211,14 +213,150 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
     addOACuts_(oaProb, xk);
     addSeparationCuts_(oaProb);  // enhance FP, convex feasible region overall (gi's independently might be non-convex)
 
-    e2_->clear();
-    e2_->load(rel);
+       // Create a linear-only problem (copy variables, linear objective, linear
+    // constraints)
+    {
+      ProblemPtr linProb(new Problem(env_));
+
+      // Build mapping from old variable indices -> new VariablePtr
+      size_t maxOldIdx = 0;
+      for (VariableConstIterator vit = oaProb->varsBegin();
+           vit != oaProb->varsEnd(); ++vit) {
+        VariablePtr v = *vit;
+        if ((size_t)v->getIndex() > maxOldIdx) {
+          maxOldIdx = v->getIndex();
+        }
+      }
+      std::vector<VariablePtr> mapOldToNew(maxOldIdx + 1, VariablePtr());
+
+      // copy variables (preserve indices / ordering by mapping)
+      for (VariableConstIterator vit = oaProb->varsBegin();
+           vit != oaProb->varsEnd(); ++vit) {
+        VariablePtr v = *vit;
+        VariablePtr v_new =
+            linProb->newVariable(v->getLb(), v->getUb(), v->getType());
+        mapOldToNew[v->getIndex()] = v_new;
+      }
+
+      // prepare a zero point for evaluations/gradients sized to OA problem
+      UInt oaVarCnt = (UInt)(maxOldIdx + 1);
+      std::vector<double> x0(oaVarCnt, 0.0);
+      std::vector<double> grad(oaVarCnt, 0.0);
+
+      // copy linear objective if present (use gradient + constant via eval)
+      FunctionPtr oaf = oaProb->getObjective()->getFunction();
+      if (oaf && oaf->getLinearFunction()) {
+        int err = 0;
+        std::fill(grad.begin(), grad.end(), 0.0);
+        oaf->evalGradient(x0.data(), grad.data(), &err);
+        if (!err) {
+          LinearFunctionPtr nlf(new LinearFunction());
+          // use mapping to add terms
+          for (UInt i = 0; i < grad.size(); ++i) {
+            if (fabs(grad[i]) > 1e-12 && i < mapOldToNew.size() &&
+                mapOldToNew[i]) {
+              nlf->addTerm(mapOldToNew[i], grad[i]);
+            }
+          }
+          double val = 0.0;
+          err = 0;
+          val = oaf->eval(x0.data(), &err);
+          if (!err) {
+            linProb->changeObj(FunctionPtr(new Function(nlf)), val);
+          } else {
+            linProb->changeObj(FunctionPtr(new Function(nlf)), 0.0);
+          }
+        }
+      }
+
+      // copy only linear constraints (includes OA + separation cuts)
+      for (ConstraintConstIterator cit = oaProb->consBegin();
+           cit != oaProb->consEnd(); ++cit) {
+        ConstraintPtr c = *cit;
+        FunctionPtr cf = c->getFunction();
+        if (!cf || !cf->getLinearFunction())
+          continue;
+
+        int err = 0;
+        std::fill(grad.begin(), grad.end(), 0.0);
+        cf->evalGradient(x0.data(), grad.data(), &err);
+        if (err)
+          continue;
+
+        LinearFunctionPtr nclf(new LinearFunction());
+        for (UInt i = 0; i < grad.size(); ++i) {
+          if (fabs(grad[i]) > 1e-12 && i < mapOldToNew.size() &&
+              mapOldToNew[i]) {
+            nclf->addTerm(mapOldToNew[i], grad[i]);
+          }
+        }
+
+        // compute constant term b = f(0)
+        double b = 0.0;
+        err = 0;
+        b = cf->eval(x0.data(), &err);
+        if (err)
+          b = 0.0;
+
+        double lb = c->getLb();
+        double ub = c->getUb();
+        double new_lb = (lb == -INFINITY) ? -INFINITY : lb - b;
+        double new_ub = (ub == INFINITY) ? INFINITY : ub - b;
+
+        linProb->newConstraint(FunctionPtr(new Function(nclf)), new_lb,
+                               new_ub);
+      }
+
+      // use linear-only problem for MILP engine
+      oaProb = linProb;
+    }
+
+
+
+
+
+ 
+    //For checking if oaProb has any non linear constraints
+    for (ConstraintConstIterator c_iter = oaProb->consBegin();
+     c_iter != oaProb->consEnd(); ++c_iter) {
+
+    ConstraintPtr c = *c_iter;
+
+    if (c->getFunctionType() != Linear) {
+        std::cout << "Nonlinear constraint found: "
+                  << c->getName()
+                  << " type = " << c->getFunctionType()
+                  << std::endl;
+          }
+    }    
+
+    //continue
+    e2_->load(oaProb);
 
     EngineStatus st2 = e2_->solve();
     if (st2 != ProvenOptimal && st2 != ProvenLocalOptimal)
       break;
 
     ConstSolutionPtr milpSol = e2_->getSolution();
+
+    //Checking if solution exists
+    if (!milpSol) {
+    std::cout << "milpSol is NULL!" << std::endl;
+    return;
+}
+
+const double* primal = milpSol->getPrimal();
+
+if (!primal) {
+    std::cout << "No primal solution available!" << std::endl;
+    return;
+}
+
+
+
+
+
+
     std::vector<double> xhat(milpSol->getPrimal(), milpSol->getPrimal() + n_);
 
     if (isNonlinearFeasible_(xhat.data())) {
