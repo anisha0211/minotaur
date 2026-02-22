@@ -57,7 +57,7 @@ CplexMILPEngine::CplexMILPEngine(EnvPtr env)
   stats_->calls    = 0;
   stats_->time     = 0;
   logger_ = env->getLogger();
-  timeLimit_ = INFINITY;
+  timeLimit_ = 1e45;
   upperCutoff_ = INFINITY;
   writeMipStarts_ = env_->getOptions()->findBool("oa_use_mip_starts")->getValue();
   if (writeMipStarts_) {
@@ -760,6 +760,18 @@ EngineStatus CplexMILPEngine::solve()
      logger_->msgStream(LogInfo) << me_ << "Failed to obtain solution data." << std::endl;
      solstat = CPXXgetstat(cpxenv_, cpxlp_); //get solve status
      //cpxstatus_ = CPXXgetstatstring (cpxenv_, solstat, cpxbuffer);
+
+    // Get objective value
+    cpxstatus_ = CPXXgetobjval(cpxenv_, cpxlp_, &objval);
+    if (cpxstatus_) {
+       logger_->msgStream(LogError) << "Failed to get objective value." << std::endl;
+    }
+
+    // Get primal variables
+    cpxstatus_ = CPXXgetx(cpxenv_, cpxlp_, x, 0, cur_numcols - 1);
+    if (cpxstatus_) {
+        logger_->msgStream(LogError) << "Failed to get primal solution." << std::endl;
+    }
   }
 
   // Write MIP start for the next iteration

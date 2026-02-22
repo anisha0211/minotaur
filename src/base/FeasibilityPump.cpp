@@ -379,7 +379,7 @@ if (!primal) {
     buildL2Objective_(projProb, xhat);
 
     e1_->clear();
-    e1_->load(projProb);
+    e1_->load(rel);
 
     EngineStatus st3 = e1_->solve();
     if (st3 != ProvenOptimal && st3 != ProvenLocalOptimal)
