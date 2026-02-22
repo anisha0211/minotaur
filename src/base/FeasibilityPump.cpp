@@ -1,401 +1,179 @@
-// Minotaur _ Feasibility Pump (MILP + MINLP)
-//
+// ============================================================================
+// Enhanced Feasibility Pump for Convex MINLP
+// ============================================================================
+
 #include "MinotaurConfig.h"
-#include "Constraint.h"
-#include "Engine.h"
-#include "Environment.h"
 #include "FeasibilityPump.h"
-#include "Function.h"
-#include "LinearFunction.h"
+#include "Environment.h"
+#include "Problem.h"
+#include "Engine.h"
 #include "Logger.h"
-#include "Node.h"
-#include "SolutionPool.h"
-#include "Objective.h"
-#include "ProblemSize.h"
 #include "Timer.h"
-#include "Types.h"
+#include "SolutionPool.h"
+#include "Relaxation.h"
+#include "LinearFunction.h"
+#include "Function.h"
+#include "Objective.h"
+#include "Constraint.h"
 #include "Variable.h"
-#include "Relaxation.h"           // ← Added
-#include <cmath>
-#include <cstdlib>
-#include <algorithm>
+#include "Option.h"
 #include <vector>
+#include <cmath>
+#include <set>
 
 using namespace Minotaur;
 
-// ---------------------------------------------------------------------------
-// static
-// ---------------------------------------------------------------------------
-const std::string FeasibilityPump::me_ = "FeasibilityPump: ";
+// Constructor (e1: NLP engine, e2: MILP engine)
 
-// ---------------------------------------------------------------------------
-// constructors
-// ---------------------------------------------------------------------------
-FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e2)
-  : e1_(EnginePtr()), e2_(e2), env_(env),
-    intTol_(1e-6), nToFlip_(0), p_(p), stats_(nullptr)
+FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr nlpEng,
+                                 EnginePtr milpEng)
+  : env_(env),
+    p_(p),
+    e1_(nlpEng),
+    e2_(milpEng),
+    intTol_(1e-6)
 {
-  stats_ = new FeasPumpStats();
-  stats_->numNLPs = stats_->errors = stats_->numCycles = 0;
-  stats_->time = 0.0;
-  stats_->errors = 0;
-  stats_->bestObjValue = INFINITY;
-
-  initCommon_();
-
-}
-
-FeasibilityPump::FeasibilityPump(EnvPtr env, ProblemPtr p,
-                                 EnginePtr e1, EnginePtr e2)
-  : e1_(e1), e2_(e2), env_(env),
-    intTol_(1e-6), nToFlip_(0), p_(p), stats_(nullptr)
-
-{
-  stats_ = new FeasPumpStats();
-  stats_->numNLPs = stats_->errors = stats_->numCycles = 0;
-  stats_->time = 0.0;
-  stats_->errors = 0;
-  stats_->bestObjValue = INFINITY;
-
-  initCommon_();
-
-}
-
-void FeasibilityPump::initCommon_()
-{
-  srand(1);
   logger_ = env_->getLogger();
   timer_ = env_->getNewTimer();
+  n_ = p->getNumVars();
 
-  intVars_.clear();
-  for (VariableConstIterator v = p_->varsBegin(); v != p_->varsEnd(); ++v) {
-    if ((*v)->getType() == Binary || (*v)->getType() == Integer) {
-      intVars_.push_back(*v);
+  // Collect integer vars
+  for (VariableConstIterator it = p->varsBegin(); it != p->varsEnd(); ++it) {
+    if ((*it)->getType() == Binary || (*it)->getType() == Integer) {
+      intVars_.push_back(*it);
     }
   }
 
-  contSol_.resize(p_->getNumVars(), 0.0);
-  roundedSol_.resize(p_->getNumVars(), 0.0);
-  projSol_.resize(p_->getNumVars(), 0.0);
+  // Ensure Jacobian exists ONCE
+  if (!p_->getJacobian()) {
+    p_->prepareForSolve();
+  }
 }
-
-// ---------------------------------------------------------------------------
-// destructor
-// ---------------------------------------------------------------------------
-FeasibilityPump::~FeasibilityPump()
+//random functions to ensure utility
+bool FeasibilityPump::isFrac_(const double *x) const
 {
-  delete stats_;
-  if (timer_) delete timer_;
-}
-
-// ---------------------------------------------------------------------------
-// random functions
-// ---------------------------------------------------------------------------
-bool FeasibilityPump::isFrac_(const double* x) const
-{
+  // Simple check: any integer variable fractional?
   for (size_t i = 0; i < intVars_.size(); ++i) {
-    double val = x[intVars_[i]->getIndex()];
-    double frac = val - std::floor(val);
-    if (frac > intTol_ && frac < 1.0 - intTol_) return true;
+    UInt idx = intVars_[i]->getIndex();
+    if (fabs(x[idx] - round(x[idx])) > intTol_) {
+      return true;
+    }
   }
   return false;
 }
 
-void FeasibilityPump::convertSol_(SolutionPoolPtr s_pool,
-                                  ConstSolutionPtr sol) const
+bool FeasibilityPump::cycle_(UInt) const
 {
-  int err = 0;
-  double obj = p_->getObjValue(sol->getPrimal(), &err);
-  if (!err) {
-    s_pool->addSolution(ConstSolutionPtr(
-          new Solution(obj, sol->getPrimal(), p_)));
-  }
+  return false;
 }
 
 UInt FeasibilityPump::hash_() const
 {
-  UInt h = 0;
-  for (size_t i = 0; i < intVars_.size(); ++i) {
-    double v = roundedSol_[intVars_[i]->getIndex()];
-    h = h * 31 + static_cast<UInt>(std::round(v));
-  }
-  return h;
+  return 0;
 }
 
-bool FeasibilityPump::cycle_(UInt h) const
+void FeasibilityPump::perturb_(UInt, UInt)
 {
-  static std::set<UInt> seen;
-  if (seen.count(h)) return true;
-  seen.insert(h);
-  if (seen.size() > 100) seen.clear(); // avoid unbounded growth
-  return false;
+  // do nothing
 }
 
-void FeasibilityPump::perturb_(UInt, UInt nflip)
+void FeasibilityPump::convertSol_(SolutionPool*, const Solution*) const
 {
-  std::vector<size_t> idx(intVars_.size());
-  for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
-  std::random_shuffle(idx.begin(), idx.end());
-
-  for (UInt i = 0; i < std::min(nflip, (UInt)idx.size()); ++i) {
-    VariablePtr v = intVars_[idx[i]];
-    double val = roundedSol_[v->getIndex()];
-    roundedSol_[v->getIndex()] = (std::abs(val - std::floor(val)) < intTol_) ?
-                                 std::ceil(val) : std::floor(val);
-  }
+  // do nothing
 }
 
-// ---------------------------------------------------------------------------
-// Step 1 _ solve relaxation (LP or NLP)
-// ---------------------------------------------------------------------------
-bool FeasibilityPump::solveRelaxation_(EnginePtr engine, RelaxationPtr rel, const double*& x)
+void FeasibilityPump::writeStats(std::ostream &) const
 {
-  if (!rel) {
-    logger_->msgStream(LogError) << me_ << "Relaxation is NULL!\n";
-    return false;
-  }
-
-  engine->clear();
-  engine->load(rel);               // ← Changed: use rel_
-  EngineStatus st = engine->solve();
-  ++stats_->numNLPs;
-
-  if (st != ProvenOptimal && st != ProvenLocalOptimal) {
-    logger_->msgStream(LogInfo) << me_
-                                << "Relaxation failed (status=" << st << ")\n";
-    return false;
-  }
-
-  ConstSolutionPtr sol = engine->getSolution();
-  x = sol->getPrimal();
-  return true;
+  // do nothing
 }
+// Utility Checks
 
-// ---------------------------------------------------------------------------
-// Step 2 _ random rounding (MILP only)
-// ---------------------------------------------------------------------------
-void FeasibilityPump::randomRound_(const double* contX)
+bool FeasibilityPump::hasInteger_() const
 {
-  std::fill(roundedSol_.begin(), roundedSol_.end(), 0.0);
-  UInt idx = 0;
-  for (VariableConstIterator v = p_->varsBegin(); v != p_->varsEnd(); ++v, ++idx) {
-    if ((*v)->getType() == Binary || (*v)->getType() == Integer) {
-      double val = contX[idx];
-      double floorV = std::floor(val);
-      double ceilV = std::ceil(val);
-      if (std::abs(val - floorV) < intTol_) { roundedSol_[idx] = floorV; continue; }
-      if (std::abs(val - ceilV) < intTol_) { roundedSol_[idx] = ceilV; continue; }
-      bool roundUp = (rand() % 2 == 0);
-      roundedSol_[idx] = roundUp ? ceilV : floorV;
-    } else {
-      roundedSol_[idx] = contX[idx];
-    }
-  }
+  return !intVars_.empty();
 }
 
-// ---------------------------------------------------------------------------
-// Step 3 _ feasibility check
-// ---------------------------------------------------------------------------
-bool FeasibilityPump::isFeasible_() const
-{
-  int err = 0;
-  p_->getObjValue(roundedSol_.data(), &err);
-  if (err) return false;
-
-  for (ConstraintConstIterator it = p_->consBegin(); it != p_->consEnd(); ++it) {
-    ConstraintPtr c = *it;
-    double lb = c->getLb();
-    double ub = c->getUb();
-    int error = 0;
-    double val = c->getFunction()->eval(roundedSol_.data(), &error);
-    if (error) {
-      logger_->msgStream(LogDebug) << me_ << "Constraint eval error (non-linear?).\n";
-      return false;
-    }
-    if ((lb > -INFINITY && val < lb - intTol_) ||
-        (ub < INFINITY && val > ub + intTol_)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// Step 4 _ L1 projection (MILP)
-// ---------------------------------------------------------------------------
-bool FeasibilityPump::l1Projection_()
-{
-  std::vector<VariablePtr> auxVars;
-  std::vector<ConstraintPtr> auxCons;
-  LinearFunctionPtr objLF(new LinearFunction());
-
-  for (size_t i = 0; i < intVars_.size(); ++i) {
-    VariablePtr v = intVars_[i];
-    UInt idx = v->getIndex();
-    double target = roundedSol_[idx];
-
-    VariablePtr t = p_->newVariable(0.0, INFINITY, Continuous);
-    auxVars.push_back(t);
-
-    // t >= x - target
-    LinearFunctionPtr lf1(new LinearFunction());
-    lf1->addTerm(v, 1.0);
-    lf1->addTerm(t, -1.0);
-    FunctionPtr f1(new Function(lf1));
-    ConstraintPtr c1 = p_->newConstraint(f1, -INFINITY, target);
-    auxCons.push_back(c1);
-
-    // t >= -(x - target)
-    LinearFunctionPtr lf2(new LinearFunction());
-    lf2->addTerm(v, -1.0);
-    lf2->addTerm(t, -1.0);
-    FunctionPtr f2(new Function(lf2));
-    ConstraintPtr c2 = p_->newConstraint(f2, -INFINITY, -target);
-    auxCons.push_back(c2);
-
-    objLF->addTerm(t, 1.0);
-  }
-
-  FunctionPtr objF(new Function(objLF));
-  p_->changeObj(objF, 0.0);
-
-  e2_->clear();
-  e2_->load(p_);
-  EngineStatus st = e2_->solve();
-  ++stats_->numNLPs;
-
-  // clean up
-  for (VariablePtr t : auxVars) p_->markDelete(t);
-  for (ConstraintPtr c : auxCons) p_->markDelete(c);
-  p_->delMarkedCons();
-  p_->delMarkedVars();
-  p_->prepareForSolve();
-
-  if (st != ProvenOptimal && st != ProvenLocalOptimal) {
-    logger_->msgStream(LogInfo) << me_
-                                << "L1 projection failed (status=" << st << ")\n";
-    return false;
-  }
-
-  ConstSolutionPtr sol = e2_->getSolution();
-  const double* pr = sol->getPrimal();
-  std::copy(pr, pr + p_->getNumVars(), projSol_.begin());
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// MINLP _ OA rounding
-// ---------------------------------------------------------------------------
-bool FeasibilityPump::oaRounding_()
-{
-  FunctionPtr f1, f2;
-  ProblemPtr oaProb = p_->clone(env_);
-  LinearFunctionPtr objLF(new LinearFunction());
-
-  // L1 slack variables
-  std::vector<VariablePtr> slacks;
-  //for (size_t i = 0; i < intVars_.size(); ++i) {
-  //  VariablePtr v = oaProb->getVariable(intVars_[i]->getIndex());
-  //  double target = roundedSol_[intVars_[i]->getIndex()];
-  //  VariablePtr t = oaProb->newVariable(0.0, INFINITY, Continuous);
-  //  slacks.push_back(t);
-  //  objLF->addTerm(t, 1.0);
-
-  //  LinearFunctionPtr lf1(new LinearFunction());
-  //  lf1->addTerm(v, 1.0);
-  //  lf1->addTerm(t, -1.0);
-  //            
-  //  //f1 = FunctionPtr(new Function(lf1));
-  //  //oaProb->newConstraint(f1, -INFINITY, target);
-
-  //  //LinearFunctionPtr lf2(new LinearFunction());
-  //  //lf2->addTerm(v, -1.0);
-  //  //lf2->addTerm(t, -1.0);
-  //  //f2 = FunctionPtr(new Function(lf2));
-  //  //oaProb->newConstraint(f2, -INFINITY, -target);
-  //}
-
-  //// Add previous linearizations (if any)
-  ////for (size_t k = 0; k < oaCuts_.size(); ++k) {
-  ////  LinearFunctionPtr lf = oaCuts_[k]->getFunction()->getLinearFunction();
-  ////  if (lf) {
-  ////    LinearFunctionPtr lfc = lf->clone();
-  ////    FunctionPtr f(new Function(lfc));
-  ////    oaProb->newConstraint(f, -INFINITY, oaRhs_[k]);
-  ////  }
-  ////}
-
-  //oaProb->changeObj(FunctionPtr(new Function(objLF)), 0.0);
-
-  e2_->clear();
-  e2_->load(oaProb);
-  EngineStatus st = e2_->solve();
-  ++stats_->numNLPs;
-
-  if (st != ProvenOptimal && st != ProvenLocalOptimal) {
-    return false;
-  }
-
-  ConstSolutionPtr sol = e2_->getSolution();
-  const double* x = sol->getPrimal();
-  std::copy(x, x + p_->getNumVars(), roundedSol_.begin());
-  oaPoints_.push_back(std::vector<double>(x, x + p_->getNumVars()));
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// MINLP _ L2 projection
-// ---------------------------------------------------------------------------
-bool FeasibilityPump::l2Projection_()
-{
-  ProblemPtr projProb = p_->clone(env_);
-  LinearFunctionPtr objLF(new LinearFunction());
-  double constPart = 0.0;
-
-  for (size_t i = 0; i < intVars_.size(); ++i) {
-    VariablePtr v = projProb->getVariable(intVars_[i]->getIndex());
-    double target = roundedSol_[intVars_[i]->getIndex()];
-    objLF->addTerm(v, -2.0 * target);
-    constPart += target * target;
-  }
-
-  projProb->changeObj(FunctionPtr(new Function(objLF)), constPart);
-
-  e1_->clear();
-  e1_->load(projProb);
-  EngineStatus st = e1_->solve();
-  ++stats_->numNLPs;
-
-  if (st != ProvenOptimal && st != ProvenLocalOptimal) {
-    return false;
-  }
-
-  ConstSolutionPtr sol = e1_->getSolution();
-  const double* pr = sol->getPrimal();
-  std::copy(pr, pr + p_->getNumVars(), projSol_.begin());
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// shouldFP_ _ detect MILP vs MINLP
-// ---------------------------------------------------------------------------
-bool FeasibilityPump::shouldFP_() const
+bool FeasibilityPump::isMILP_() const
 {
   ConstProblemSizePtr sz = p_->getSize();
-  bool isMILP = (sz->nonlinCons == 0 && (sz->ints > 0 || sz->bins > 0));
-  bool isMINLP = (sz->nonlinCons > 0 && (sz->ints > 0 || sz->bins > 0));
-  return isMILP || isMINLP;
+  return (sz->nonlinCons == 0 && hasInteger_());
 }
 
-// ---------------------------------------------------------------------------
-// main solve()
-// ---------------------------------------------------------------------------
-void FeasibilityPump::solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr s_pool)
+bool FeasibilityPump::isMINLP_() const
 {
-   if (!rel) {
-    // Try to get it manually
-   OptionDBPtr options = env_->getOptions();
-   rel=(RelaxationPtr) new Relaxation(p_,env_);
+  ConstProblemSizePtr sz = p_->getSize();
+  return (sz->nonlinCons > 0 && hasInteger_());
+}
+
+bool FeasibilityPump::isIntegerFeasible_(const double *x) const
+{
+  for (size_t i = 0; i < intVars_.size(); ++i) {
+    UInt idx = intVars_[i]->getIndex();
+    if (fabs(x[idx] - round(x[idx])) > intTol_)
+      return false;
+  }
+  return true;
+}
+
+bool FeasibilityPump::isNonlinearFeasible_(const double *x) const
+{
+  for (ConstraintConstIterator it = p_->consBegin();
+       it != p_->consEnd(); ++it) {
+    int err = 0;
+    double val = (*it)->getFunction()->eval(x, &err);
+    if (err)
+      return false;
+
+    if (val < (*it)->getLb() - 1e-6)
+      return false;
+    if (val > (*it)->getUb() + 1e-6)
+      return false;
+  }
+  return true;
+}
+
+// ============================================================================
+// Solve function
+// ============================================================================
+
+void FeasibilityPump::solve(NodePtr, RelaxationPtr, SolutionPoolPtr sPool)
+{
+  if (!hasInteger_())
+    return;
+
+  timer_->start();
+
+  if (isMILP_()) {
+    solveMILP_(sPool);
+    return;
+  }
+
+  if (isMINLP_()) {
+    solveMINLP_(sPool);
+  }
+}
+
+// Tackle MILP case first (solve directly using MILP engine)
+
+void FeasibilityPump::solveMILP_(SolutionPoolPtr sPool)
+{
+  e2_->clear();
+  e2_->load(p_);
+
+  EngineStatus st = e2_->solve();
+
+  if (st == ProvenOptimal || st == ProvenLocalOptimal) {
+    sPool->addSolution(e2_->getSolution());
+  }
+}
+
+// MINLP Case (Enhanced version)
+
+void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
+{
+  // Continuous NLP (initial relaxation step)
+  OptionDBPtr options = env_->getOptions();
+   RelaxationPtr rel=(RelaxationPtr) new Relaxation(p_,env_);
    rel->calculateSize();
    if(options->findBool("use_native_cgraph")->getValue() || rel->isQP() ||
       rel->isQuadratic()) {
@@ -404,106 +182,198 @@ void FeasibilityPump::solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr s_p
      rel->setJacobian(p_->getJacobian());
      rel->setHessian(p_->getHessian());
    }
+  e1_->clear();
+  e1_->load(rel);
 
-   if (!rel) {
-     logger_->msgStream(LogInfo)
-       << me_ << "No relaxation available\n";
-     return;
-   }
-  }
-  if (!shouldFP_()) {
-    logger_->msgStream(LogInfo) << me_ << "Skipping (not MILP/MINLP)\n";
+  EngineStatus st = e1_->solve();
+  if (st != ProvenOptimal && st != ProvenLocalOptimal)
+    return;
+
+  ConstSolutionPtr sol = e1_->getSolution();
+  std::vector<double> xk(sol->getPrimal(), sol->getPrimal() + n_);
+
+  if (isIntegerFeasible_(xk.data()) && isNonlinearFeasible_(xk.data())) {
+    sPool->addSolution(sol);
     return;
   }
 
-  timer_->start();
-  ConstProblemSizePtr sz = p_->getSize();
-  bool isMILP = (sz->nonlinCons == 0 && (sz->ints > 0 || sz->bins > 0));
+  const UInt maxIter = 100;
+  UInt iter = 0;
 
-  const double* x = nullptr;
-  EnginePtr relaxEngine = isMILP ? e2_ : e1_;
+  while (iter < maxIter) {
+    ++iter;
+    
+    // Build OA (Outer Approximation) MILP, (FP-OA)
 
-  if (!solveRelaxation_(relaxEngine,rel, x)) {
-    stats_->time = timer_->query();
-    return;
-  }
+    ProblemPtr oaProb = p_->clone(env_);
 
-  std::copy(x, x + p_->getNumVars(), contSol_.begin());
+    buildL1Objective_(oaProb, xk);
+    addOACuts_(oaProb, xk);
+    addSeparationCuts_(oaProb);  // enhance FP, convex feasible region overall (gi's independently might be non-convex)
 
-  // -----------------------------------------------------------------------
-  // MILP path
-  // -----------------------------------------------------------------------
-  if (isMILP) {
-    randomRound_(contSol_.data());
-    if (isFeasible_()) {
+    e2_->clear();
+    e2_->load(oaProb);
+
+    EngineStatus st2 = e2_->solve();
+    if (st2 != ProvenOptimal && st2 != ProvenLocalOptimal)
+      break;
+
+    ConstSolutionPtr milpSol = e2_->getSolution();
+    std::vector<double> xhat(milpSol->getPrimal(), milpSol->getPrimal() + n_);
+
+    if (isNonlinearFeasible_(xhat.data())) {
+
       int err = 0;
-      double obj = p_->getObjValue(roundedSol_.data(), &err);
-      s_pool->addSolution(ConstSolutionPtr(new Solution(obj, roundedSol_.data(), p_)));
-      logger_->msgStream(LogInfo) << me_ << "MILP: feasible after rounding.\n";
-      stats_->time = timer_->query();
-      return;
+      double obj = p_->getObjValue(xhat.data(), &err);
+
+      if (!err) {
+        sPool->addSolution(
+            ConstSolutionPtr(new Solution(obj, xhat.data(), p_)));
+      }
+
+      break;
     }
 
-    const UInt maxIter = 200;
-    UInt iter = 0;
-    while (iter < maxIter && timer_->query() < 60.0) {
-      ++iter;
-      randomRound_(x);
-      if (isFeasible_()) {
-        int err = 0;
-        double obj = p_->getObjValue(roundedSol_.data(), &err);
-        s_pool->addSolution(ConstSolutionPtr(new Solution(obj, roundedSol_.data(), p_)));
-        logger_->msgStream(LogInfo) << me_ << "MILP: feasible solution (iter " << iter << ")\n";
-        break;
-      }
-      if (!l1Projection_()) break;
-      x = projSol_.data();
+    // L2 Projection, (FP-NLP)
+
+    ProblemPtr projProb = p_->clone(env_);
+    buildL2Objective_(projProb, xhat);
+
+    e1_->clear();
+    e1_->load(projProb);
+
+    EngineStatus st3 = e1_->solve();
+    if (st3 != ProvenOptimal && st3 != ProvenLocalOptimal)
+      break;
+
+    ConstSolutionPtr projSol = e1_->getSolution();
+    xk.assign(projSol->getPrimal(), projSol->getPrimal() + n_);
+
+    if (isIntegerFeasible_(xk.data()) && isNonlinearFeasible_(xk.data())) {
+      sPool->addSolution(projSol);
+      break;
     }
+
+    storeSeparationCut_(xk, xhat);
   }
-  // -----------------------------------------------------------------------
-  // MINLP path
-  // -----------------------------------------------------------------------
-  else {
-    oaPoints_.clear();
-    oaCuts_.clear();
-    oaRhs_.clear();
-
-    std::copy(x, x + p_->getNumVars(), roundedSol_.begin());
-    oaPoints_.push_back(std::vector<double>(x, x + p_->getNumVars()));
-
-    const UInt maxIter = 50;
-    UInt iter = 0;
-    while (iter < maxIter && timer_->query() < 120.0) {
-      ++iter;
-      if (!oaRounding_()) {
-        logger_->msgStream(LogInfo) << me_ << "MINLP: OA rounding failed.\n";
-        break;
-      }
-      if (isFeasible_()) {
-        int err = 0;
-        double obj = p_->getObjValue(roundedSol_.data(), &err);
-        s_pool->addSolution(ConstSolutionPtr(new Solution(obj, roundedSol_.data(), p_)));
-        logger_->msgStream(LogInfo) << me_ << "MINLP: feasible solution (iter " << iter << ")\n";
-        break;
-      }
-      if (!l2Projection_()) {
-        logger_->msgStream(LogInfo) << me_ << "MINLP: L2 projection failed.\n";
-        break;
-      }
-      std::copy(projSol_.begin(), projSol_.end(), roundedSol_.begin());
-      oaPoints_.push_back(std::vector<double>(projSol_.begin(), projSol_.end()));
-    }
-  }
-
-  stats_->time = timer_->query();
 }
 
-// ---------------------------------------------------------------------------
-// statistics
-// ---------------------------------------------------------------------------
-void FeasibilityPump::writeStats(std::ostream &out) const
+// L1 (manhattan distance, L1 norm) MILP Objective
+
+void FeasibilityPump::buildL1Objective_(ProblemPtr p,
+                                        const std::vector<double> &xk)
 {
-  out << me_ << "NLPs solved = " << stats_->numNLPs << "\n"
-      << me_ << "time (s) = " << stats_->time << "\n"
-      << me_ << "OA cuts = " << oaCuts_.size() << "\n";
+  LinearFunctionPtr obj(new LinearFunction());
+
+  for (size_t i = 0; i < intVars_.size(); ++i) {
+    UInt idx = intVars_[i]->getIndex();
+    VariablePtr v = p->getVariable(idx);
+
+    VariablePtr t = p->newVariable(0, INFINITY, Continuous);
+
+    LinearFunctionPtr c1(new LinearFunction());
+    c1->addTerm(v, 1);
+    c1->addTerm(t, -1);
+    p->newConstraint(FunctionPtr(new Function(c1)), -INFINITY, xk[idx]);
+
+    LinearFunctionPtr c2(new LinearFunction());
+    c2->addTerm(v, -1);
+    c2->addTerm(t, -1);
+    p->newConstraint(FunctionPtr(new Function(c2)), -INFINITY, -xk[idx]);
+
+    obj->addTerm(t, 1);
+  }
+
+  p->changeObj(FunctionPtr(new Function(obj)), 0);
+}
+
+// OA Gradient Cuts (Linearization of constraints via taylor's polynomial)
+
+void FeasibilityPump::addOACuts_(ProblemPtr oaProb,
+                                 const std::vector<double> &xk)
+{
+  for (ConstraintConstIterator it = p_->consBegin();
+       it != p_->consEnd(); ++it) {
+    ConstraintPtr c = *it;
+
+    if (c->getFunction()->getLinearFunction())
+      continue;
+
+    int error = 0;
+
+    double gval = c->getFunction()->eval(xk.data(), &error);
+    if (error)
+      continue;
+
+    std::vector<double> grad(n_, 0.0);
+
+    c->getFunction()->evalGradient(xk.data(), grad.data(), &error);
+    if (error)
+      continue;
+
+    LinearFunctionPtr lf(new LinearFunction());
+
+    double rhs = c->getUb() - gval;
+
+    for (UInt i = 0; i < n_; ++i) {
+      if (fabs(grad[i]) > 1e-12) {
+        VariablePtr v = oaProb->getVariable(i);
+        lf->addTerm(v, grad[i]);
+        rhs += grad[i] * xk[i];
+      }
+    }
+
+    oaProb->newConstraint(FunctionPtr(new Function(lf)), -INFINITY, rhs);
+  }
+}
+
+// L2 (L2 norm - 2nd degree convex objective) Projection Objective
+
+void FeasibilityPump::buildL2Objective_(ProblemPtr p,
+                                        const std::vector<double> &xhat)
+{
+  LinearFunctionPtr lf(new LinearFunction());
+  double c = 0.0;
+
+  for (size_t i = 0; i < intVars_.size(); ++i) {
+    UInt idx = intVars_[i]->getIndex();
+    VariablePtr v = p->getVariable(idx);
+
+    double t = xhat[idx];
+    lf->addTerm(v, -2.0 * t);
+    c += t * t;
+  }
+
+  p->changeObj(FunctionPtr(new Function(lf)), c);
+}
+
+// Separation Cuts (to tackle the last straw)
+
+void FeasibilityPump::storeSeparationCut_(const std::vector<double> &xk,
+                                          const std::vector<double> &xhat)
+{
+  sepCuts_.push_back(std::make_pair(xk, xhat));
+}
+
+void FeasibilityPump::addSeparationCuts_(ProblemPtr p)
+{
+  for (size_t k = 0; k < sepCuts_.size(); ++k) {
+    const std::vector<double> &xk = sepCuts_[k].first;
+    const std::vector<double> &xhat = sepCuts_[k].second;
+
+    LinearFunctionPtr lf(new LinearFunction());
+    double rhs = 0.0;
+
+    for (size_t i = 0; i < intVars_.size(); ++i) {
+      UInt idx = intVars_[i]->getIndex();
+      double coef = xk[idx] - xhat[idx];
+
+      VariablePtr v = p->getVariable(idx);
+      lf->addTerm(v, coef);
+
+      rhs += coef * xk[idx];
+    }
+
+    p->newConstraint(FunctionPtr(new Function(lf)), rhs, INFINITY);
+  }
 }

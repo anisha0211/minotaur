@@ -1,102 +1,99 @@
-//
-// Minotaur – Feasibility Pump (MILP + MINLP)
-// Header file
-//
-#ifndef MINOTAUR_FEASIBILITYPUMP_H
-#define MINOTAUR_FEASIBILITYPUMP_H
-#include "Heuristic.h"
-#include "Handler.h"
+// ============================================================================
+// Enhanced Feasibility Pump for Convex MINLP
+// ============================================================================
+
+#ifndef MINOTAUR_FEASIBILITY_PUMP_H
+#define MINOTAUR_FEASIBILITY_PUMP_H
+
+#include "Environment.h"
 #include "Problem.h"
+#include "Engine.h"
+#include "Logger.h"
+#include "Timer.h"
 #include "SolutionPool.h"
-#include "Types.h"
-#include <memory>          // std::shared_ptr
+#include "Relaxation.h"
+#include "Heuristic.h"
 #include <vector>
+#include <utility>
 
-namespace Minotaur {
+namespace Minotaur{
 
-class Engine;
-class Environment;
-class Node;
-class Relaxation;
-class Timer;
+ struct FeasPumpStats {
+   UInt   numNLPs;
+   UInt   errors;
+   UInt   numCycles;
+   double time;
+   double bestObjValue;
+ };
 
-// ---------------------------------------------------------------------------
-// Statistics
-// ---------------------------------------------------------------------------
-struct FeasPumpStats {
-  UInt   numNLPs;
-  UInt   errors;
-  UInt   numCycles;
-  double time;
-  double bestObjValue;
-};
 
-// ---------------------------------------------------------------------------
-// FeasibilityPump
-// ---------------------------------------------------------------------------
-class FeasibilityPump : public Heuristic {
+
+class FeasibilityPump: public Heuristic {
 public:
-  // MILP constructor – the one Minotaur calls
-  FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr e2);
+  // Constructor
+  FeasibilityPump(EnvPtr env, ProblemPtr p, EnginePtr nlpEngine,
+                  EnginePtr milpEngine);
 
-  // MINLP constructor – pass both engines
-  FeasibilityPump(EnvPtr env, ProblemPtr p,
-                  EnginePtr e1, EnginePtr e2);
+  // Main entry
+  void solve(NodePtr node, RelaxationPtr rel, SolutionPoolPtr sPool);
+  virtual void writeStats(std::ostream &out) const ;
 
-  virtual ~FeasibilityPump();
+private:
+  // Core solve branches
+  void solveMILP_(SolutionPoolPtr sPool);
+  void solveMINLP_(SolutionPoolPtr sPool);
 
-  // ----- Handler interface -------------------------------------------------
-  // NOTE: **no parameter names** – must match the pure-virtual base
-  virtual void solve(NodePtr, RelaxationPtr, SolutionPoolPtr) override;
-  virtual void writeStats(std::ostream &out) const override;
+  // Objective builders
+  void buildL1Objective_(ProblemPtr p, const std::vector<double> &xk);
 
-  // ----- Helper ------------------------------------------------------------
-  bool shouldFP_() const;
-protected:                     // <--- everything below is protected
-  // ----- Engines -----------------------------------------------------------
-  EnginePtr e2_;   // LP/MILP engine
-  EnginePtr e1_;  // NLP engine (MINLP only)
+  void buildL2Objective_(ProblemPtr p, const std::vector<double> &xhat);
 
-  // ----- (rest of the members you already have) -------------------------
-  EnvPtr    env_;
+  // Outer Approximation cuts
+  void addOACuts_(ProblemPtr p, const std::vector<double> &xk);
+
+  // Enhanced separation cuts
+  void storeSeparationCut_(const std::vector<double> &xk,
+                           const std::vector<double> &xhat);
+
+  void addSeparationCuts_(ProblemPtr p);
+
+  // Feasibility checks
+  bool isIntegerFeasible_(const double *x) const;
+  bool isNonlinearFeasible_(const double *x) const;
+
+  bool hasInteger_() const;
+  bool isMILP_() const;
+  bool isMINLP_() const;
+
+protected:
+  // Environment
+  EnvPtr env_;
   ProblemPtr p_;
+  EnginePtr e1_; //NLP Engine
+  EnginePtr e2_; //MILP Engine
+
   LoggerPtr logger_;
-  Timer*    timer_;
-  double    intTol_;
-  UInt      nToFlip_;
-  VarVector intVars_;
-  std::vector<double> contSol_;
-  std::vector<double> roundedSol_;
-  std::vector<double> projSol_;
-  FeasPumpStats*      stats_;
-  std::vector<std::vector<double>> oaPoints_;
-  std::vector<ConstraintPtr>       oaCuts_;
-  std::vector<double>              oaRhs_;
+  Timer *timer_;
+  
 
   // ----- Helper functions required by LinFeasPump -----------------------
   bool   isFrac_(const double* x) const;   // true if any integer variable is fractional
   void   convertSol_(SolutionPoolPtr s_pool, ConstSolutionPtr sol) const;
   UInt   hash_() const;                    // simple hash of roundedSol_
   bool   cycle_(UInt h) const;             // detect cycling (very small map)
+  std::vector<double> roundedSol_;
   void   perturb_(UInt h, UInt nflip);    // flip nflip variables
+  // Problem structure
+  std::vector<VariablePtr> intVars_;
+  UInt n_;  // number of variables
+  double intTol_;
+  FeasPumpStats*      stats_;
 
-  // ----- (your private helpers) -----------------------------------------
-  void initCommon_();
-  bool solveRelaxation_(EnginePtr engine,RelaxationPtr rel, const double*& x);
-  void randomRound_(const double* contX);
-  bool l1Projection_();
-  bool oaRounding_();
-  bool l2Projection_();
-  bool isFeasible_() const;
+  // Separation cuts storage
+  std::vector<std::pair<std::vector<double>, std::vector<double>>> sepCuts_;
 
-  static const std::string me_;
+
 };
-
-// ---------------------------------------------------------------------------
-// Smart pointer – std::shared_ptr (no boost)
-// ---------------------------------------------------------------------------
 typedef FeasibilityPump* FeasibilityPumpPtr;
-
-} // namespace Minotaur
-
-#endif // MINOTAUR_FEASIBILITYPUMP_H
+}
+#endif
