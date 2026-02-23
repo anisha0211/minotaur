@@ -57,7 +57,7 @@ CplexMILPEngine::CplexMILPEngine(EnvPtr env)
   stats_->calls    = 0;
   stats_->time     = 0;
   logger_ = env->getLogger();
-  timeLimit_ = 1e45;
+  timeLimit_ = 1e4;
   upperCutoff_ = INFINITY;
   writeMipStarts_ = env_->getOptions()->findBool("oa_use_mip_starts")->getValue();
   if (writeMipStarts_) {

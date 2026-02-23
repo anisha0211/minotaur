@@ -378,8 +378,19 @@ if (!primal) {
     projProb->prepareForSolve();
     buildL2Objective_(projProb, xhat);
 
+   projProb->calculateSize();
+   if(options->findBool("use_native_cgraph")->getValue() || projProb->isQP() ||
+      projProb->isQuadratic()) {
+      projProb->setNativeDer();
+   } else {
+      projProb->setJacobian(p_->getJacobian());
+      projProb->setHessian(p_->getHessian());
+   }
+
+
+
     e1_->clear();
-    e1_->load(rel);
+    e1_->load(projProb);
 
     EngineStatus st3 = e1_->solve();
     if (st3 != ProvenOptimal && st3 != ProvenLocalOptimal)
