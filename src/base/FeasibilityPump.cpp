@@ -186,15 +186,33 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
   e1_->load(rel);
 
   EngineStatus st = e1_->solve();
-  if (st != ProvenOptimal && st != ProvenLocalOptimal)
-    return;
+  if (st != ProvenOptimal && st != ProvenLocalOptimal){
+     std::cout << "NLP solve failed, status = " << st << std::endl;
+     return;}
    
   ConstSolutionPtr sol = e1_->getSolution();
   if (sol && sol->getPrimal()) {
     sPool->addSolution(sol);   // ADD THIS
 }  
+  if (!sol || !sol->getPrimal()) {
+    std::cout << "NLP returned NULL solution!\n";
+    return;
+   }
 
   std::vector<double> xk(sol->getPrimal(), sol->getPrimal() + n_);
+
+
+   for (ConstraintConstIterator it = p_->consBegin();
+     it != p_->consEnd(); ++it) {
+
+    int err = 0;
+    (*it)->getFunction()->eval(xk.data(), &err);
+
+    if (err) {
+        std::cout << "Invalid NLP point: constraint undefined\n";
+        return;
+    }
+}
 
   if (isIntegerFeasible_(xk.data()) && isNonlinearFeasible_(xk.data())) {
     sPool->addSolution(sol);
@@ -354,8 +372,9 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
     EngineStatus st2 = e2_->solve();
     //Checking MILP Status
     std::cout << "MILP status = " << st2 << std::endl;
-    if (st2 != ProvenOptimal && st2 != ProvenLocalOptimal)
-      break;
+    if (st2 != ProvenOptimal && st2 != ProvenLocalOptimal){
+      std::cout << "MILP failed, status = " << st2 << std::endl;
+      break;}
 
     ConstSolutionPtr milpSol = e2_->getSolution();
 
@@ -510,8 +529,9 @@ void FeasibilityPump::addOACuts_(ProblemPtr oaProb,
     int error = 0;
 
     double gval = c->getFunction()->eval(xk.data(), &error);
-    if (error)
-      continue;
+    if (error){
+       std::cout << "Skipping OA cut: function undefined\n";
+       continue;}
 
     std::vector<double> grad(n_, 0.0);
 
