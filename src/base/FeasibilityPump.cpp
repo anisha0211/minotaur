@@ -188,9 +188,11 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
   EngineStatus st = e1_->solve();
   if (st != ProvenOptimal && st != ProvenLocalOptimal)
     return;
-
+   
   ConstSolutionPtr sol = e1_->getSolution();
-
+  if (sol && sol->getPrimal()) {
+    sPool->addSolution(sol);   // ADD THIS
+}  
 
   std::vector<double> xk(sol->getPrimal(), sol->getPrimal() + n_);
 
@@ -199,12 +201,28 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
     return;
   }
 
+
+
+    
+    //Checking solution at NLP Stage
+    std::cout << "NLP xk:\n";
+    for (UInt i=0; i<n_; ++i){
+        std::cout << xk[i] << " ";}
+       std::cout << std::endl;
+
+    if (!sol || !sol->getPrimal()) {
+    std::cout << "NLP returned NULL solution!\n";
+    return;
+    }
+ 
+
+
   const UInt maxIter = 100;
   UInt iter = 0;
 
   while (iter < maxIter) {
     ++iter;
-    
+    std::cout << "\n========== FP Iteration " << iter << " ==========\n";
     // Build OA (Outer Approximation) MILP, (FP-OA)
 
     ProblemPtr oaProb = p_->clone(env_);
@@ -334,15 +352,25 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
     e2_->load(oaProb);
 
     EngineStatus st2 = e2_->solve();
+    //Checking MILP Status
+    std::cout << "MILP status = " << st2 << std::endl;
     if (st2 != ProvenOptimal && st2 != ProvenLocalOptimal)
       break;
 
     ConstSolutionPtr milpSol = e2_->getSolution();
 
+
+    //Adding solution to sPool
+    if (milpSol && milpSol->getPrimal()){
+        sPool->addSolution(milpSol);
+    }
+
+
+   
     //Checking if solution exists
-    if (!milpSol) {
+    if (!milpSol || !milpSol->getPrimal()) {
     std::cout << "milpSol is NULL!" << std::endl;
-    return;
+    break;
 }
 
 const double* primal = milpSol->getPrimal();
@@ -359,10 +387,26 @@ if (!primal) {
 
     std::vector<double> xhat(milpSol->getPrimal(), milpSol->getPrimal() + n_);
 
+     //Adding checks after MILP Solving
+     if (!milpSol || !milpSol->getPrimal()) {
+         std::cout << "MILP returned NULL solution!\n";
+         continue;
+     }
+
+     std::cout << "\n=== MILP Solution xhat ===\n";
+      for (UInt i = 0; i < n_; ++i) {
+          std::cout << xhat[i] << " ";
+     }
+     std::cout << "\n=========================\n";
+
+
+
     if (isNonlinearFeasible_(xhat.data())) {
 
       int err = 0;
       double obj = p_->getObjValue(xhat.data(), &err);
+      //Checking objective value
+      std::cout << "Objective value at xhat = " << obj << std::endl;
 
       if (!err) {
         sPool->addSolution(
@@ -378,14 +422,14 @@ if (!primal) {
     projProb->prepareForSolve();
     buildL2Objective_(projProb, xhat);
 
-   projProb->calculateSize();
-   if(options->findBool("use_native_cgraph")->getValue() || projProb->isQP() ||
-      projProb->isQuadratic()) {
-      projProb->setNativeDer();
-   } else {
-      projProb->setJacobian(p_->getJacobian());
-      projProb->setHessian(p_->getHessian());
-   }
+    projProb->calculateSize();
+    if(options->findBool("use_native_cgraph")->getValue() || projProb->isQP() ||
+       projProb->isQuadratic()) {
+       projProb->setNativeDer();
+    } else {
+       projProb->setJacobian(p_->getJacobian());
+       projProb->setHessian(p_->getHessian());
+    }
 
 
 
@@ -397,7 +441,21 @@ if (!primal) {
       break;
 
     ConstSolutionPtr projSol = e1_->getSolution();
+
+    if (projSol && projSol->getPrimal()){
+       sPool->addSolution(sol);
+    }
+   
     xk.assign(projSol->getPrimal(), projSol->getPrimal() + n_);
+
+    //Checking NLP Projection Result
+    std::cout << "\n=== Projection xk ===\n";
+    for (UInt i = 0; i < n_; ++i) {
+        std::cout << xk[i] << " ";
+    }
+    std::cout << "\n====================\n";
+
+
 
     if (isIntegerFeasible_(xk.data()) && isNonlinearFeasible_(xk.data())) {
       sPool->addSolution(projSol);
@@ -472,6 +530,24 @@ void FeasibilityPump::addOACuts_(ProblemPtr oaProb,
         rhs += grad[i] * xk[i];
       }
     }
+
+
+    //Checking solution after OA Cuts
+    std::cout << "OA cut: ";
+     for (UInt i = 0; i < n_; ++i) {
+        if (fabs(grad[i]) > 1e-6) {
+            std::cout << grad[i] << "*x" << i << " ";
+         }
+     }
+     std::cout << "<= " << rhs << std::endl;    
+     
+    if (error) {
+         std::cout << "Gradient error in constraint, skipping\n";
+         continue;
+    }
+
+
+
 
     oaProb->newConstraint(FunctionPtr(new Function(lf)), -INFINITY, rhs);
   }
