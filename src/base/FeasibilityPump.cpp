@@ -96,13 +96,13 @@ bool FeasibilityPump::hasInteger_() const
 bool FeasibilityPump::isMILP_() const
 {
   ConstProblemSizePtr sz = p_->getSize();
-  return (sz->nonlinCons == 0 && hasInteger_());
+  return (sz->nonlinCons == 0 && sz->quadCons ==0  &&  hasInteger_());
 }
 
 bool FeasibilityPump::isMINLP_() const
 {
   ConstProblemSizePtr sz = p_->getSize();
-  return (sz->nonlinCons > 0 && hasInteger_());
+  return ((sz->nonlinCons > 0 || sz->quadCons >0) && hasInteger_());
 }
 
 bool FeasibilityPump::isIntegerFeasible_(const double *x) const
@@ -474,7 +474,11 @@ if (!primal) {
     }
     std::cout << "\n====================\n";
 
+   int err = 0;
+   double obj = p_->getObjValue(xk.data(), &err);
 
+    std::cout << "Projection Objective Value = "
+          << obj << std::endl;
 
     if (isIntegerFeasible_(xk.data()) && isNonlinearFeasible_(xk.data())) {
       sPool->addSolution(projSol);
@@ -579,6 +583,7 @@ void FeasibilityPump::buildL2Objective_(ProblemPtr p,
                                         const std::vector<double> &xhat)
 {
   LinearFunctionPtr lf(new LinearFunction());
+  QuadraticFunctionPtr qf(new QuadraticFunction()); 
   double c = 0.0;
 
   for (size_t i = 0; i < intVars_.size(); ++i) {
@@ -586,11 +591,12 @@ void FeasibilityPump::buildL2Objective_(ProblemPtr p,
     VariablePtr v = p->getVariable(idx);
 
     double t = xhat[idx];
+    qf->addTerm(v, v, 1.0);
     lf->addTerm(v, -2.0 * t);
     c += t * t;
   }
 
-  p->changeObj(FunctionPtr(new Function(lf)), c);
+  p->changeObj(FunctionPtr(new Function(lf,qf)), c);
 }
 
 // Separation Cuts (to tackle the last straw)

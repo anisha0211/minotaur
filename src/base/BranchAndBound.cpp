@@ -408,7 +408,7 @@ void BranchAndBound::solve()
 #endif
   }
   //making should_stop=true, to run FP
-  should_stop=true;
+  should_stop=false;
   // solve root outside the loop. save the useful information.
   while(should_stop == false) {
 #if SPEW
