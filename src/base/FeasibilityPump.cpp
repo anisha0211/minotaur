@@ -163,7 +163,7 @@ void FeasibilityPump::solveMILP_(SolutionPoolPtr sPool)
   EngineStatus st = e2_->solve();
 
   if (st == ProvenOptimal || st == ProvenLocalOptimal) {
-    sPool->addSolution(e2_->getSolution());
+    //sPool->addSolution(e2_->getSolution());
   }
 }
 
@@ -192,7 +192,7 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
    
   ConstSolutionPtr sol = e1_->getSolution();
   if (sol && sol->getPrimal()) {
-    sPool->addSolution(sol);   // ADD THIS
+    //sPool->addSolution(sol);   // ADD THIS
 }  
   if (!sol || !sol->getPrimal()) {
     std::cout << "NLP returned NULL solution!\n";
@@ -215,7 +215,34 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
 }
 
   if (isIntegerFeasible_(xk.data()) && isNonlinearFeasible_(xk.data())) {
-    sPool->addSolution(sol);
+    //sPool->addSolution(sol);
+    int err = 0;
+
+    double obj =
+        p_->getObjValue(xk.data(), &err);
+
+    if (!err) {
+
+        double *newx = new double[n_];
+
+        std::copy(xk.begin(), xk.end(), newx);
+
+        SolutionPtr newSol =
+            (SolutionPtr) new Solution(
+                obj,
+                newx,
+                p_);
+
+        sPool->addSolution(newSol);
+
+        std::cout
+            << "\nFP FEASIBLE SOLUTION FOUND\n";
+
+        std::cout
+            << "Objective = "
+            << obj
+            << std::endl;
+    }
     return;
   }
 
@@ -381,7 +408,7 @@ void FeasibilityPump::solveMINLP_(SolutionPoolPtr sPool)
 
     //Adding solution to sPool
     if (milpSol && milpSol->getPrimal()){
-        sPool->addSolution(milpSol);
+        //sPool->addSolution(milpSol);
     }
 
 
@@ -428,8 +455,8 @@ if (!primal) {
       std::cout << "Objective value at xhat = " << obj << std::endl;
 
       if (!err) {
-        sPool->addSolution(
-            ConstSolutionPtr(new Solution(obj, xhat.data(), p_)));
+       // sPool->addSolution(
+            ConstSolutionPtr(new Solution(obj, xhat.data(), p_));
       }
 
       break;
@@ -462,7 +489,7 @@ if (!primal) {
     ConstSolutionPtr projSol = e1_->getSolution();
 
     if (projSol && projSol->getPrimal()){
-       sPool->addSolution(sol);
+      // sPool->addSolution(sol);
     }
    
     xk.assign(projSol->getPrimal(), projSol->getPrimal() + n_);
@@ -481,7 +508,7 @@ if (!primal) {
           << obj << std::endl;
 
     if (isIntegerFeasible_(xk.data()) && isNonlinearFeasible_(xk.data())) {
-      sPool->addSolution(projSol);
+      //sPool->addSolution(projSol);
       break;
     }
 
